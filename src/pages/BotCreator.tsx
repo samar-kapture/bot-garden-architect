@@ -5,30 +5,25 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { Bot, Save, Play, Settings, Plus, X, MessageCircle } from "lucide-react";
+import { Bot, Save, Play, Settings, Plus, X, MessageCircle, FileText } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { FunctionDialog } from "@/components/FunctionDialog";
 import { MessageConfigDialog } from "@/components/MessageConfigDialog";
+import { PromptDialog } from "@/components/PromptDialog";
 
 const BotCreator = () => {
   const [botName, setBotName] = useState("");
   const [botDescription, setBotDescription] = useState("");
   const [functions, setFunctions] = useState<Array<{name: string; description: string; code: string}>>([]);
   const [selectedModel, setSelectedModel] = useState("OpenAI");
-  const [apiKey, setApiKey] = useState("");
-  const [prompts, setPrompts] = useState<string[]>([]);
-  const [actions, setActions] = useState<Array<{name: string; description: string}>>([
-    { name: "orderstatus", description: "status of the order" },
-    { name: "meeshocustomerdata", description: "customer data of meesho" },
-    { name: "meeshocustomerdata1", description: "data of the customer" },
-    { name: "ordersingledetails", description: "details of the order" }
-  ]);
+  const [agentPrompt, setAgentPrompt] = useState("");
   const [showFunctionDialog, setShowFunctionDialog] = useState(false);
   const [showMessageDialog, setShowMessageDialog] = useState(false);
+  const [showPromptDialog, setShowPromptDialog] = useState(false);
   
   const { toast } = useToast();
 
-  const models = ["Vitos", "Gemini", "OpenAI", "Deepseek"];
+  const models = ["Gemini", "OpenAI", "Deepseek"];
 
   const handleSaveBot = () => {
     if (!botName.trim()) {
@@ -62,95 +57,121 @@ const BotCreator = () => {
     setFunctions(functions.filter((_, i) => i !== index));
   };
 
-  const handleAddPrompt = () => {
-    setPrompts([...prompts, ""]);
-  };
-
-  const handleRemovePrompt = (index: number) => {
-    setPrompts(prompts.filter((_, i) => i !== index));
-  };
-
-  const handlePromptChange = (index: number, value: string) => {
-    const updated = prompts.map((prompt, i) => i === index ? value : prompt);
-    setPrompts(updated);
-  };
-
-  const handleAddAction = (action: {name: string; description: string}) => {
-    setActions([...actions, action]);
-  };
-
   const handleMessageConfig = (config: any) => {
     console.log("Message config saved:", config);
   };
 
+  const handlePromptSave = (prompt: string) => {
+    setAgentPrompt(prompt);
+  };
+
   return (
     <>
-      <div className="container mx-auto p-6 space-y-6">
+      <div className="container mx-auto p-8 space-y-8">
         {/* Header */}
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-gradient-primary rounded-lg flex items-center justify-center">
-              <Bot className="w-5 h-5 text-white" />
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 bg-gradient-primary rounded-xl flex items-center justify-center shadow-lg">
+              <Bot className="w-6 h-6 text-white" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold">Bot Creator</h1>
+              <h1 className="text-3xl font-bold">Bot Creator</h1>
               <p className="text-muted-foreground">Design and configure your intelligent agent</p>
             </div>
           </div>
-          <div className="flex gap-2">
-            <Button onClick={handleTestBot} variant="outline" className="gap-2">
+          <div className="flex gap-3">
+            <Button onClick={handleTestBot} variant="outline" className="gap-2 px-6">
               <Play className="w-4 h-4" />
               Test Bot
             </Button>
-            <Button onClick={handleSaveBot} className="gap-2">
+            <Button onClick={handleSaveBot} className="gap-2 px-6">
               <Save className="w-4 h-4" />
               Save Bot
             </Button>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Bot Details Section */}
+        <Card className="shadow-card">
+          <CardHeader>
+            <CardTitle className="text-xl">Bot Details</CardTitle>
+            <CardDescription>
+              Define your bot's basic information and identity
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-2">
+                <Label htmlFor="bot-name">Bot Name</Label>
+                <Input
+                  id="bot-name"
+                  placeholder="Enter bot name..."
+                  value={botName}
+                  onChange={(e) => setBotName(e.target.value)}
+                  className="h-11"
+                />
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="bot-description">Description</Label>
+                <Textarea
+                  id="bot-description"
+                  placeholder="Describe what your bot does..."
+                  value={botDescription}
+                  onChange={(e) => setBotDescription(e.target.value)}
+                  className="h-11 resize-none"
+                />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* Left Column */}
-          <div className="space-y-6">
+          <div className="space-y-8">
             {/* Functions */}
             <Card className="shadow-card">
               <CardHeader>
                 <div className="flex items-center justify-between">
-                  <CardTitle className="flex items-center gap-2">
-                    <Settings className="w-4 h-4" />
-                    Functions
-                  </CardTitle>
+                  <div>
+                    <CardTitle className="flex items-center gap-2 text-xl">
+                      <Settings className="w-5 h-5" />
+                      Functions
+                    </CardTitle>
+                    <CardDescription className="mt-2">
+                      Create and add functions/APIs that are essential for the bot operations.
+                    </CardDescription>
+                  </div>
                   <Button 
                     onClick={() => setShowFunctionDialog(true)}
                     variant="outline" 
-                    size="sm" 
-                    className="gap-2"
+                    className="gap-2 px-4"
                   >
                     <Plus className="w-4 h-4" />
-                    Add New
+                    Add Function
                   </Button>
                 </div>
-                <CardDescription>
-                  Create and add function/APIs that are essential for the bot operations.
-                </CardDescription>
               </CardHeader>
               <CardContent>
                 {functions.length === 0 ? (
-                  <div className="text-center py-8 text-muted-foreground border-2 border-dashed border-border rounded-lg">
-                    No Functions Available
+                  <div className="text-center py-12 text-muted-foreground border-2 border-dashed border-border rounded-xl">
+                    <Settings className="w-8 h-8 mx-auto mb-3 opacity-50" />
+                    <p className="font-medium">No Functions Available</p>
+                    <p className="text-sm mt-1">Add your first function to get started</p>
                   </div>
                 ) : (
-                  <div className="space-y-2">
+                  <div className="space-y-3">
                     {functions.map((func, index) => (
-                      <div key={index} className="flex items-center justify-between p-3 border border-border rounded-lg">
-                        <div>
-                          <div className="font-medium">{func.name}</div>
-                          <div className="text-sm text-muted-foreground">{func.description}</div>
+                      <div key={index} className="flex items-center justify-between p-4 border border-border rounded-xl bg-card/50">
+                        <div className="flex-1">
+                          <div className="font-medium text-foreground">{func.name}</div>
+                          <div className="text-sm text-muted-foreground mt-1">{func.description}</div>
                         </div>
                         <Button
                           variant="ghost"
                           size="sm"
                           onClick={() => handleRemoveFunction(index)}
+                          className="text-destructive hover:text-destructive hover:bg-destructive/10"
                         >
                           <X className="w-4 h-4" />
                         </Button>
@@ -160,123 +181,71 @@ const BotCreator = () => {
                 )}
               </CardContent>
             </Card>
-
-            {/* Available Actions */}
-            <Card className="shadow-card">
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle>Available Actions</CardTitle>
-                  <Button variant="outline" size="sm" className="gap-2">
-                    <Plus className="w-4 h-4" />
-                    Add Action
-                  </Button>
-                </div>
-                <CardDescription>
-                  Proceed to select existing actions or add new
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  {actions.map((action, index) => (
-                    <div key={index} className="flex items-center justify-between">
-                      <div>
-                        <div className="font-medium text-primary">{action.name}</div>
-                        <div className="text-sm text-muted-foreground">{action.description}</div>
-                      </div>
-                      <Button variant="outline" size="sm">
-                        + Add
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
           </div>
 
           {/* Right Column */}
-          <div className="space-y-6">
+          <div className="space-y-8">
             {/* LLM Model */}
             <Card className="shadow-card">
               <CardHeader>
-                <CardTitle>LLM Model</CardTitle>
+                <CardTitle className="text-xl">LLM Model</CardTitle>
                 <CardDescription>
-                  Leverages a LLM to enhance business logic.
+                  Select the language model that will power your bot's intelligence.
                 </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-2 gap-3">
+              <CardContent className="space-y-6">
+                <div className="grid grid-cols-1 gap-4">
                   {models.map((model) => (
-                    <div key={model} className="flex items-center gap-2">
+                    <div key={model} className="flex items-center gap-3 p-3 border border-border rounded-lg hover:bg-accent/50 transition-colors">
                       <input
                         type="radio"
                         id={model}
                         name="model"
                         checked={selectedModel === model}
                         onChange={() => setSelectedModel(model)}
-                        className="w-4 h-4"
+                        className="w-4 h-4 text-primary"
                       />
-                      <Label htmlFor={model} className="text-sm">{model}</Label>
+                      <Label htmlFor={model} className="text-sm font-medium cursor-pointer flex-1">{model}</Label>
                     </div>
                   ))}
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="api-key">
-                    API Key <span className="text-destructive">*</span>
-                  </Label>
-                  <p className="text-xs text-muted-foreground">
-                    Provides a secure API Key to enable speech-to-text transcription in the Transcriber UI.
-                  </p>
-                  <Input
-                    id="api-key"
-                    placeholder="Enter API Key"
-                    type="password"
-                    value={apiKey}
-                    onChange={(e) => setApiKey(e.target.value)}
-                  />
-                </div>
-
-                <div className="space-y-2">
+                <div className="space-y-3">
                   <div className="flex items-center justify-between">
-                    <Label>Agent Prompts</Label>
+                    <div>
+                      <Label>Agent Prompt</Label>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Configure the system prompt that defines your agent's behavior
+                      </p>
+                    </div>
                     <Button 
-                      onClick={handleAddPrompt}
+                      onClick={() => setShowPromptDialog(true)}
                       variant="outline" 
                       size="sm" 
                       className="gap-2"
                     >
-                      <Plus className="w-4 h-4" />
-                      Add Prompt
+                      <FileText className="w-4 h-4" />
+                      Configure
                     </Button>
                   </div>
-                  <p className="text-xs text-muted-foreground">
-                    Attach files and Add appropriate prompts to train the bot
-                  </p>
-                  {prompts.length > 0 && (
-                    <div className="space-y-2">
-                      {prompts.map((prompt, index) => (
-                        <div key={index} className="flex gap-2">
-                          <Input
-                            value={prompt}
-                            onChange={(e) => handlePromptChange(index, e.target.value)}
-                            placeholder="Enter prompt..."
-                          />
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleRemovePrompt(index)}
-                          >
-                            <X className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      ))}
+                  {agentPrompt && (
+                    <div className="p-3 bg-accent/20 border border-border rounded-lg">
+                      <p className="text-sm text-muted-foreground">
+                        {agentPrompt.substring(0, 100)}
+                        {agentPrompt.length > 100 ? "..." : ""}
+                      </p>
                     </div>
                   )}
                 </div>
 
-                <div className="space-y-2">
+                <div className="space-y-3">
                   <div className="flex items-center justify-between">
-                    <Label>Message Configuration</Label>
+                    <div>
+                      <Label>Message Configuration</Label>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Configure welcome, closing, and re-engagement messages
+                      </p>
+                    </div>
                     <Button 
                       onClick={() => setShowMessageDialog(true)}
                       variant="outline" 
@@ -287,38 +256,6 @@ const BotCreator = () => {
                       Configure
                     </Button>
                   </div>
-                  <p className="text-xs text-muted-foreground">
-                    Configure welcome, closing wait period messages and logics.
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Bot Configuration */}
-            <Card className="shadow-card">
-              <CardHeader>
-                <CardTitle>Bot Details</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="bot-name">Bot Name</Label>
-                  <Input
-                    id="bot-name"
-                    placeholder="Enter bot name..."
-                    value={botName}
-                    onChange={(e) => setBotName(e.target.value)}
-                  />
-                </div>
-                
-                <div className="space-y-2">
-                  <Label htmlFor="bot-description">Description</Label>
-                  <Textarea
-                    id="bot-description"
-                    placeholder="Describe what your bot does..."
-                    value={botDescription}
-                    onChange={(e) => setBotDescription(e.target.value)}
-                    rows={3}
-                  />
                 </div>
               </CardContent>
             </Card>
@@ -337,6 +274,13 @@ const BotCreator = () => {
         open={showMessageDialog}
         onOpenChange={setShowMessageDialog}
         onSave={handleMessageConfig}
+      />
+
+      <PromptDialog
+        open={showPromptDialog}
+        onOpenChange={setShowPromptDialog}
+        onSave={handlePromptSave}
+        initialValue={agentPrompt}
       />
     </>
   );

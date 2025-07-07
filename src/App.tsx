@@ -31,12 +31,12 @@ const App = () => (
                 </div>
               </header>
               <main className="flex-1 overflow-auto">
-                <Routes>
-                  <Route path="/" element={<BotCreator />} />
-                  <Route path="/library" element={<BotLibrary />} />
-                  <Route path="/flow" element={<FlowBuilder />} />
-                  <Route path="*" element={<NotFound />} />
-                </Routes>
+        <Routes>
+          <Route path="/" element={<BotLibrary />} />
+          <Route path="/create" element={<BotCreator />} />
+          <Route path="/flow" element={<FlowBuilder />} />
+          <Route path="*" element={<NotFound />} />
+        </Routes>
               </main>
             </div>
           </div>

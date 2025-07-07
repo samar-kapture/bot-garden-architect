@@ -14,14 +14,8 @@ import {
 
 const navigationItems = [
   {
-    title: "Bot Creator",
-    url: "/",
-    icon: Bot,
-    description: "Create new bots with prompts and tools"
-  },
-  {
     title: "Bot Library",
-    url: "/library",
+    url: "/",
     icon: Book,
     description: "Browse and manage your created bots"
   },
@@ -46,13 +40,13 @@ export function AppSidebar() {
       : "hover:bg-accent/50 hover:text-accent-foreground";
 
   return (
-    <Sidebar className={isCollapsed ? "w-14" : "w-64"} collapsible="icon">
+    <Sidebar className={isCollapsed ? "w-16" : "w-72"} collapsible="icon">
       <SidebarContent className="bg-gradient-card border-r border-border">
         {/* Header */}
-        <div className="p-4 border-b border-border">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-gradient-primary rounded-lg flex items-center justify-center">
-              <Bot className="w-4 h-4 text-white" />
+        <div className="p-6 border-b border-border">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-gradient-primary rounded-xl flex items-center justify-center shadow-lg">
+              <Bot className="w-5 h-5 text-white" />
             </div>
             {!isCollapsed && (
               <div>
@@ -67,12 +61,12 @@ export function AppSidebar() {
           </div>
         </div>
 
-        <SidebarGroup>
-          <SidebarGroupLabel className="text-xs font-medium text-muted-foreground px-4 py-2">
+        <SidebarGroup className="p-4">
+          <SidebarGroupLabel className="text-xs font-medium text-muted-foreground px-2 py-2 mb-2">
             {!isCollapsed ? "Navigation" : ""}
           </SidebarGroupLabel>
           <SidebarGroupContent>
-            <SidebarMenu>
+            <SidebarMenu className="space-y-2">
               {navigationItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton asChild className="w-full">
@@ -80,14 +74,14 @@ export function AppSidebar() {
                       to={item.url} 
                       end 
                       className={({ isActive }) => 
-                        `flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-200 ${getNavCls({ isActive })}`
+                        `flex items-center gap-4 px-4 py-3 rounded-xl transition-all duration-200 ${getNavCls({ isActive })}`
                       }
                     >
-                      <item.icon className="w-4 h-4 shrink-0" />
+                      <item.icon className="w-5 h-5 shrink-0" />
                       {!isCollapsed && (
                         <div className="flex-1 text-left">
                           <div className="text-sm font-medium">{item.title}</div>
-                          <div className="text-xs text-muted-foreground">{item.description}</div>
+                          <div className="text-xs text-muted-foreground opacity-75">{item.description}</div>
                         </div>
                       )}
                     </NavLink>
@@ -99,8 +93,8 @@ export function AppSidebar() {
         </SidebarGroup>
 
         {/* API Status Indicator */}
-        <div className="mt-auto p-4 border-t border-border">
-          <div className={`flex items-center gap-2 ${isCollapsed ? 'justify-center' : ''}`}>
+        <div className="mt-auto p-6 border-t border-border">
+          <div className={`flex items-center gap-3 ${isCollapsed ? 'justify-center' : ''}`}>
             <div className="w-2 h-2 bg-success rounded-full animate-pulse"></div>
             {!isCollapsed && (
               <span className="text-xs text-muted-foreground">API Ready</span>

@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Book, Search, Edit, Trash2, Play, Copy } from "lucide-react";
+import { Book, Search, Edit, Trash2, Play, Copy, Bot } from "lucide-react";
 
 // Mock data for demonstration
 const mockBots = [
@@ -78,9 +78,9 @@ const BotLibrary = () => {
             <p className="text-muted-foreground">Manage and organize your created bots</p>
           </div>
         </div>
-        <Button className="gap-2">
-          <Book className="w-4 h-4" />
-          Import Bot
+        <Button className="gap-2" onClick={() => window.location.href = '/create'}>
+          <Bot className="w-4 h-4" />
+          Create Bot
         </Button>
       </div>
 
