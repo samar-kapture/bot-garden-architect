@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import Editor from '@monaco-editor/react';
+import { Tool } from "@/services/api";
 
 interface FunctionDialogProps {
   open: boolean;
@@ -14,19 +15,40 @@ interface FunctionDialogProps {
     description: string;
     code: string;
   }) => void;
+  initialTool?: Tool | null;
 }
 
-export const FunctionDialog = ({ open, onOpenChange, onSave }: FunctionDialogProps) => {
+export const FunctionDialog = ({ open, onOpenChange, onSave, initialTool }: FunctionDialogProps) => {
   const [functionName, setFunctionName] = useState("");
   const [description, setDescription] = useState("");
   const [code, setCode] = useState(`// Function implementation
-function ${functionName || 'functionName'}() {
+function functionName() {
   // Your code here
   return {
     success: true,
     data: "Function executed successfully"
   };
 }`);
+
+  useEffect(() => {
+    if (initialTool) {
+      setFunctionName(initialTool.name);
+      setDescription(initialTool.description);
+      setCode(initialTool.code);
+    } else {
+      // Reset form for new tool
+      setFunctionName("");
+      setDescription("");
+      setCode(`// Function implementation
+function functionName() {
+  // Your code here
+  return {
+    success: true,
+    data: "Function executed successfully"
+  };
+}`);
+    }
+  }, [initialTool, open]);
 
   const handleSave = () => {
     if (!functionName.trim()) return;
@@ -49,7 +71,7 @@ function ${functionName || 'functionName'}() {
       <DialogContent className="max-w-4xl h-[80vh]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            Custom Function
+            {initialTool ? 'Edit Tool' : 'Create Tool'}
           </DialogTitle>
         </DialogHeader>
         

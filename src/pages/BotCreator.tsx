@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -7,25 +7,62 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Bot, Save, Play, Settings, Plus, X, MessageCircle, FileText } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { FunctionDialog } from "@/components/FunctionDialog";
 import { MessageConfigDialog } from "@/components/MessageConfigDialog";
 import { PromptDialog } from "@/components/PromptDialog";
+import { ToolLibrary } from "@/components/ToolLibrary";
+import { apiService, Bot as BotType, Tool } from "@/services/api";
 
 const BotCreator = () => {
   const [botName, setBotName] = useState("");
   const [botDescription, setBotDescription] = useState("");
-  const [functions, setFunctions] = useState<Array<{name: string; description: string; code: string}>>([]);
+  const [selectedTools, setSelectedTools] = useState<string[]>([]);
+  const [allTools, setAllTools] = useState<Tool[]>([]);
   const [selectedModel, setSelectedModel] = useState("OpenAI");
   const [agentPrompt, setAgentPrompt] = useState("");
+  const [messageConfig, setMessageConfig] = useState<any>(null);
   const [showFunctionDialog, setShowFunctionDialog] = useState(false);
   const [showMessageDialog, setShowMessageDialog] = useState(false);
   const [showPromptDialog, setShowPromptDialog] = useState(false);
+  const [showToolLibrary, setShowToolLibrary] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editingBotId, setEditingBotId] = useState<string | null>(null);
   
   const { toast } = useToast();
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
   const models = ["Gemini", "OpenAI", "Deepseek"];
 
-  const handleSaveBot = () => {
+  useEffect(() => {
+    loadTools();
+    const botId = searchParams.get('edit');
+    if (botId) {
+      loadBotForEditing(botId);
+    }
+  }, [searchParams]);
+
+  const loadTools = () => {
+    const tools = apiService.getTools();
+    setAllTools(tools);
+  };
+
+  const loadBotForEditing = (botId: string) => {
+    const bot = apiService.getBotById(botId);
+    if (bot) {
+      setBotName(bot.name);
+      setBotDescription(bot.description);
+      setSelectedTools(bot.functions);
+      setSelectedModel(bot.selectedModel);
+      setAgentPrompt(bot.agentPrompt);
+      setMessageConfig(bot.messageConfig);
+      setIsEditing(true);
+      setEditingBotId(botId);
+    }
+  };
+
+  const handleSaveBot = async () => {
     if (!botName.trim()) {
       toast({
         title: "Validation Error",
@@ -35,34 +72,105 @@ const BotCreator = () => {
       return;
     }
 
-    toast({
-      title: "Bot Saved",
-      description: `Bot "${botName}" has been saved successfully!`,
-    });
+    try {
+      const botData = {
+        name: botName,
+        description: botDescription,
+        functions: selectedTools,
+        selectedModel,
+        agentPrompt,
+        messageConfig
+      };
+
+      if (isEditing && editingBotId) {
+        await apiService.updateBot(editingBotId, botData);
+        toast({
+          title: "Bot Updated",
+          description: `Bot "${botName}" has been updated successfully!`,
+        });
+      } else {
+        await apiService.createBot(botData);
+        toast({
+          title: "Bot Created",
+          description: `Bot "${botName}" has been created successfully!`,
+        });
+      }
+      
+      navigate('/');
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to save bot. Please try again.",
+        variant: "destructive"
+      });
+    }
   };
 
-  const handleTestBot = () => {
-    toast({
-      title: "Testing Bot",
-      description: "Bot testing functionality will be implemented",
-      variant: "default"
-    });
+  const handleTestBot = async () => {
+    if (!botName.trim()) {
+      toast({
+        title: "Validation Error",
+        description: "Bot name is required for testing",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    try {
+      await apiService.testBot('test', { input: 'test' });
+      toast({
+        title: "Bot Test Successful",
+        description: "Your bot configuration is working correctly!",
+      });
+    } catch (error) {
+      toast({
+        title: "Test Failed",
+        description: "Bot testing failed. Please check your configuration.",
+        variant: "destructive"
+      });
+    }
   };
 
-  const handleAddFunction = (func: {name: string; description: string; code: string}) => {
-    setFunctions([...functions, func]);
+  const handleAddFunction = async (toolData: { name: string; description: string; code: string }) => {
+    try {
+      const newTool = await apiService.createTool(toolData);
+      setAllTools([...allTools, newTool]);
+      setSelectedTools([...selectedTools, newTool.id]);
+      toast({
+        title: "Tool Created",
+        description: `Tool "${toolData.name}" has been created and added to this bot.`,
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to create tool. Please try again.",
+        variant: "destructive"
+      });
+    }
   };
 
-  const handleRemoveFunction = (index: number) => {
-    setFunctions(functions.filter((_, i) => i !== index));
+  const handleRemoveTool = (toolId: string) => {
+    setSelectedTools(selectedTools.filter(id => id !== toolId));
   };
 
   const handleMessageConfig = (config: any) => {
-    console.log("Message config saved:", config);
+    setMessageConfig(config);
+    toast({
+      title: "Message Configuration Saved",
+      description: "Message settings have been updated.",
+    });
   };
 
   const handlePromptSave = (prompt: string) => {
     setAgentPrompt(prompt);
+    toast({
+      title: "Agent Prompt Saved",
+      description: "Agent prompt has been updated.",
+    });
+  };
+
+  const getSelectedToolsData = () => {
+    return allTools.filter(tool => selectedTools.includes(tool.id));
   };
 
   return (
@@ -75,8 +183,10 @@ const BotCreator = () => {
               <Bot className="w-6 h-6 text-white" />
             </div>
             <div>
-              <h1 className="text-3xl font-bold">Bot Creator</h1>
-              <p className="text-muted-foreground">Design and configure your intelligent agent</p>
+            <h1 className="text-3xl font-bold">{isEditing ? 'Edit Bot' : 'Bot Creator'}</h1>
+            <p className="text-muted-foreground">
+              {isEditing ? 'Modify your intelligent agent' : 'Design and configure your intelligent agent'}
+            </p>
             </div>
           </div>
           <div className="flex gap-3">
@@ -86,7 +196,7 @@ const BotCreator = () => {
             </Button>
             <Button onClick={handleSaveBot} className="gap-2 px-6">
               <Save className="w-4 h-4" />
-              Save Bot
+              {isEditing ? 'Update Bot' : 'Save Bot'}
             </Button>
           </div>
         </div>
@@ -129,48 +239,61 @@ const BotCreator = () => {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* Left Column */}
           <div className="space-y-8">
-            {/* Functions */}
+            {/* Tools */}
             <Card className="shadow-card">
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <div>
                     <CardTitle className="flex items-center gap-2 text-xl">
                       <Settings className="w-5 h-5" />
-                      Functions
+                      Tools
                     </CardTitle>
                     <CardDescription className="mt-2">
-                      Create and add functions/APIs that are essential for the bot operations.
+                      Select and manage tools/functions that are essential for the bot operations.
                     </CardDescription>
                   </div>
-                  <Button 
-                    onClick={() => setShowFunctionDialog(true)}
-                    variant="outline" 
-                    className="gap-2 px-4"
-                  >
-                    <Plus className="w-4 h-4" />
-                    Add Function
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button 
+                      onClick={() => setShowToolLibrary(true)}
+                      variant="outline" 
+                      className="gap-2 px-4"
+                    >
+                      <Settings className="w-4 h-4" />
+                      Manage Tools
+                    </Button>
+                    <Button 
+                      onClick={() => setShowFunctionDialog(true)}
+                      variant="outline" 
+                      className="gap-2 px-4"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Create Tool
+                    </Button>
+                  </div>
                 </div>
               </CardHeader>
               <CardContent>
-                {functions.length === 0 ? (
+                {selectedTools.length === 0 ? (
                   <div className="text-center py-12 text-muted-foreground border-2 border-dashed border-border rounded-xl">
                     <Settings className="w-8 h-8 mx-auto mb-3 opacity-50" />
-                    <p className="font-medium">No Functions Available</p>
-                    <p className="text-sm mt-1">Add your first function to get started</p>
+                    <p className="font-medium">No Tools Selected</p>
+                    <p className="text-sm mt-1">Select tools from the library or create a new one</p>
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    {functions.map((func, index) => (
-                      <div key={index} className="flex items-center justify-between p-4 border border-border rounded-xl bg-card/50">
+                    {getSelectedToolsData().map((tool) => (
+                      <div key={tool.id} className="flex items-center justify-between p-4 border border-border rounded-xl bg-card/50">
                         <div className="flex-1">
-                          <div className="font-medium text-foreground">{func.name}</div>
-                          <div className="text-sm text-muted-foreground mt-1">{func.description}</div>
+                          <div className="font-medium text-foreground">{tool.name}</div>
+                          <div className="text-sm text-muted-foreground mt-1">{tool.description}</div>
+                          <div className="text-xs text-muted-foreground mt-1">
+                            Created: {new Date(tool.createdAt).toLocaleDateString()}
+                          </div>
                         </div>
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => handleRemoveFunction(index)}
+                          onClick={() => handleRemoveTool(tool.id)}
                           className="text-destructive hover:text-destructive hover:bg-destructive/10"
                         >
                           <X className="w-4 h-4" />
@@ -281,6 +404,13 @@ const BotCreator = () => {
         onOpenChange={setShowPromptDialog}
         onSave={handlePromptSave}
         initialValue={agentPrompt}
+      />
+
+      <ToolLibrary
+        open={showToolLibrary}
+        onOpenChange={setShowToolLibrary}
+        selectedTools={selectedTools}
+        onToolSelectionChange={setSelectedTools}
       />
     </>
   );

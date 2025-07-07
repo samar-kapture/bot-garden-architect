@@ -62,26 +62,26 @@ export function AppSidebar() {
         </div>
 
         <SidebarGroup className="p-4">
-          <SidebarGroupLabel className="text-xs font-medium text-muted-foreground px-2 py-2 mb-2">
+          <SidebarGroupLabel className="text-xs font-medium text-muted-foreground px-2 py-2 mb-3">
             {!isCollapsed ? "Navigation" : ""}
           </SidebarGroupLabel>
           <SidebarGroupContent>
-            <SidebarMenu className="space-y-2">
+            <SidebarMenu className="space-y-3">
               {navigationItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton asChild className="w-full">
+                  <SidebarMenuButton asChild className="w-full p-0">
                     <NavLink 
                       to={item.url} 
                       end 
                       className={({ isActive }) => 
-                        `flex items-center gap-4 px-4 py-3 rounded-xl transition-all duration-200 ${getNavCls({ isActive })}`
+                        `flex items-center gap-3 px-3 py-3 rounded-lg transition-all duration-200 ${getNavCls({ isActive })} ${isCollapsed ? 'justify-center' : ''}`
                       }
                     >
                       <item.icon className="w-5 h-5 shrink-0" />
                       {!isCollapsed && (
-                        <div className="flex-1 text-left">
-                          <div className="text-sm font-medium">{item.title}</div>
-                          <div className="text-xs text-muted-foreground opacity-75">{item.description}</div>
+                        <div className="flex-1 text-left min-w-0">
+                          <div className="text-sm font-medium truncate">{item.title}</div>
+                          <div className="text-xs text-muted-foreground opacity-75 truncate">{item.description}</div>
                         </div>
                       )}
                     </NavLink>
