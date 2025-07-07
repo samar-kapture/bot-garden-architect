@@ -225,6 +225,7 @@ class ApiService {
   private initializeSampleBots() {
     const sampleBots = [
       {
+        id: this.generateId(),
         name: "Customer Support Assistant",
         description: "Intelligent assistant for handling customer inquiries and support tickets with natural language processing.",
         functions: [],
@@ -237,9 +238,12 @@ class ApiService {
             { time: 60, message: "Is there anything else I can assist you with?" }
           ],
           closingMessage: "Thank you for contacting us. Have a great day!"
-        }
+        },
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
       },
       {
+        id: this.generateId(),
         name: "Data Analysis Bot",
         description: "Advanced AI agent for analyzing datasets, generating insights, and creating visualizations from complex data.",
         functions: [],
@@ -251,9 +255,12 @@ class ApiService {
             { time: 45, message: "Would you like me to continue with the analysis?" }
           ],
           closingMessage: "Analysis complete. Feel free to return for more insights!"
-        }
+        },
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
       },
       {
+        id: this.generateId(),
         name: "Sales Automation Agent",
         description: "AI-powered sales assistant that manages leads, follows up with prospects, and automates sales workflows.",
         functions: [],
@@ -265,18 +272,19 @@ class ApiService {
             { time: 30, message: "Can I help you find the right solution?" }
           ],
           closingMessage: "Thanks for your interest! Our team will follow up with you soon."
-        }
+        },
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
       }
     ];
 
-    sampleBots.forEach((bot) => {
-      this.createBot(bot);
-    });
+    localStorage.setItem('bots', JSON.stringify(sampleBots));
   }
 
   private initializeSampleTools() {
     const sampleTools = [
       {
+        id: this.generateId(),
         name: "Email Sender",
         description: "Sends formatted emails to specified recipients with customizable templates and attachments.",
         code: `async function sendEmail(to, subject, body, attachments = []) {
@@ -305,9 +313,12 @@ class ApiService {
       error: error.message
     };
   }
-}`
+}`,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
       },
       {
+        id: this.generateId(),
         name: "Data Validator",
         description: "Validates and sanitizes input data according to specified schemas and business rules.",
         code: `function validateData(data, schema = {}) {
@@ -348,13 +359,13 @@ class ApiService {
     errors: errors,
     data: data
   };
-}`
+}`,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
       }
     ];
 
-    sampleTools.forEach((tool) => {
-      this.createTool(tool);
-    });
+    localStorage.setItem('tools', JSON.stringify(sampleTools));
   }
 }
 
