@@ -107,7 +107,11 @@
                     <div class="recent-section">
                         <h2>Recent Bots</h2>
                         <div id="recent-bots" class="bots-grid">
-                            <!-- Recent bots will be populated here -->
+                            <div class="empty-state">
+                                <i class="fas fa-robot"></i>
+                                <p>No Recent Bots</p>
+                                <small>Create your first bot to get started</small>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -266,7 +270,11 @@
                     </div>
 
                     <div id="bots-container" class="bots-grid">
-                        <!-- Bots will be populated here -->
+                        <div class="empty-state">
+                            <i class="fas fa-robot"></i>
+                            <p>No Bots Available</p>
+                            <small>Create your first bot to get started</small>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -309,7 +317,11 @@
                         <div class="available-bots">
                             <h3>Available Bots</h3>
                             <div id="flow-bots-list" class="bots-list">
-                                <!-- Available bots for flow will be populated here -->
+                                <div class="empty-state">
+                                    <i class="fas fa-robot"></i>
+                                    <p>No Bots Available</p>
+                                    <small>Create bots first to use in flows</small>
+                                </div>
                             </div>
                         </div>
 
@@ -360,7 +372,11 @@
 
                 <div class="tools-content">
                     <div id="tools-container" class="tools-grid">
-                        <!-- Tools will be populated here -->
+                        <div class="empty-state">
+                            <i class="fas fa-tools"></i>
+                            <p>No Tools Available</p>
+                            <small>Create your first tool to get started</small>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -445,7 +461,15 @@
                         <h3>Re-Engage Messages</h3>
                         <p class="config-description">Configure bot behaviour when the customer is not responding or goes silent</p>
                         <div id="reengage-messages" class="reengage-container">
-                            <!-- Re-engage messages will be populated here -->
+                            <div class="reengage-message">
+                                <div class="reengage-inputs">
+                                    <input type="number" value="30" min="10" max="300" placeholder="Time (seconds)">
+                                    <input type="text" placeholder="Re-engage message">
+                                    <button type="button" class="btn-remove" onclick="removeReengageMessage(0)">
+                                        <i class="fas fa-times"></i>
+                                    </button>
+                                </div>
+                            </div>
                         </div>
                         <button type="button" class="btn btn-outline btn-sm" onclick="addReengageMessage()">
                             <i class="fas fa-plus"></i>
@@ -477,7 +501,11 @@
             </div>
             <div class="modal-body">
                 <div id="tool-library-content" class="tool-library-grid">
-                    <!-- Tool library will be populated here -->
+                    <div class="empty-state">
+                        <i class="fas fa-tools"></i>
+                        <p>No Tools Available</p>
+                        <small>Create tools first to add them to bots</small>
+                    </div>
                 </div>
             </div>
             <div class="modal-footer">
