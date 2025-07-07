@@ -198,16 +198,28 @@ class ApiService {
   private ensureInitialized() {
     if (this.initialized) return;
     
+    console.log('Initializing API service...');
+    
+    // Check if data already exists
+    const existingBots = localStorage.getItem('bots');
+    const existingTools = localStorage.getItem('tools');
+    
+    console.log('Existing bots:', existingBots);
+    console.log('Existing tools:', existingTools);
+    
     // Initialize with sample data if empty
-    if (this.getBots().length === 0) {
+    if (!existingBots || JSON.parse(existingBots).length === 0) {
+      console.log('Initializing sample bots...');
       this.initializeSampleBots();
     }
     
-    if (this.getTools().length === 0) {
+    if (!existingTools || JSON.parse(existingTools).length === 0) {
+      console.log('Initializing sample tools...');
       this.initializeSampleTools();
     }
     
     this.initialized = true;
+    console.log('API service initialized!');
   }
 
   private initializeSampleBots() {
@@ -257,7 +269,7 @@ class ApiService {
       }
     ];
 
-    sampleBots.forEach(bot => {
+    sampleBots.forEach((bot) => {
       this.createBot(bot);
     });
   }
@@ -337,133 +349,10 @@ class ApiService {
     data: data
   };
 }`
-      },
-      {
-        name: "API Caller",
-        description: "Makes HTTP requests to external APIs with error handling, retries, and response validation.",
-        code: `async function callAPI(url, options = {}) {
-  // API calling implementation
-  const defaultOptions = {
-    method: 'GET',
-    headers: {
-      'Content-Type': 'application/json'
-    },
-    timeout: 10000
-  };
-  
-  const config = { ...defaultOptions, ...options };
-  
-  try {
-    console.log(\`Making \${config.method} request to: \${url}\`);
-    
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), config.timeout);
-    
-    const response = await fetch(url, {
-      ...config,
-      signal: controller.signal
-    });
-    
-    clearTimeout(timeoutId);
-    
-    if (!response.ok) {
-      throw new Error(\`HTTP error! status: \${response.status}\`);
-    }
-    
-    const data = await response.json();
-    
-    return {
-      success: true,
-      status: response.status,
-      data: data,
-      headers: Object.fromEntries(response.headers.entries())
-    };
-    
-  } catch (error) {
-    return {
-      success: false,
-      error: error.message,
-      code: error.name
-    };
-  }
-}`
-      },
-      {
-        name: "File Processor",
-        description: "Processes and transforms various file formats including CSV, JSON, and XML with data extraction capabilities.",
-        code: `async function processFile(file, options = {}) {
-  // File processing implementation
-  const { format = 'auto', encoding = 'utf-8' } = options;
-  
-  try {
-    let content;
-    
-    if (typeof file === 'string') {
-      // File path or URL
-      content = await fetch(file).then(res => res.text());
-    } else if (file instanceof File) {
-      // File object
-      content = await file.text();
-    } else {
-      throw new Error('Invalid file input');
-    }
-    
-    let parsedData;
-    const detectedFormat = format === 'auto' ? detectFormat(content) : format;
-    
-    switch (detectedFormat) {
-      case 'json':
-        parsedData = JSON.parse(content);
-        break;
-      case 'csv':
-        parsedData = parseCSV(content);
-        break;
-      case 'xml':
-        parsedData = parseXML(content);
-        break;
-      default:
-        parsedData = { raw: content };
-    }
-    
-    return {
-      success: true,
-      format: detectedFormat,
-      data: parsedData,
-      size: content.length
-    };
-    
-  } catch (error) {
-    return {
-      success: false,
-      error: error.message
-    };
-  }
-}
-
-function detectFormat(content) {
-  const trimmed = content.trim();
-  if (trimmed.startsWith('{') || trimmed.startsWith('[')) return 'json';
-  if (trimmed.startsWith('<')) return 'xml';
-  if (trimmed.includes(',') && trimmed.includes('\\n')) return 'csv';
-  return 'text';
-}
-
-function parseCSV(content) {
-  const lines = content.split('\\n').filter(line => line.trim());
-  const headers = lines[0].split(',').map(h => h.trim());
-  const rows = lines.slice(1).map(line => {
-    const values = line.split(',').map(v => v.trim());
-    return headers.reduce((obj, header, index) => {
-      obj[header] = values[index] || '';
-      return obj;
-    }, {});
-  });
-  return { headers, rows, count: rows.length };
-}`
       }
     ];
 
-    sampleTools.forEach(tool => {
+    sampleTools.forEach((tool) => {
       this.createTool(tool);
     });
   }
