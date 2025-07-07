@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,15 +14,28 @@ interface MessageConfigDialogProps {
     reEngageMessages: { time: number; message: string }[];
     closingMessage: string;
   }) => void;
+  initialConfig?: {
+    welcomeMessage: string;
+    reEngageMessages: { time: number; message: string }[];
+    closingMessage: string;
+  } | null;
 }
 
-export const MessageConfigDialog = ({ open, onOpenChange, onSave }: MessageConfigDialogProps) => {
+export const MessageConfigDialog = ({ open, onOpenChange, onSave, initialConfig }: MessageConfigDialogProps) => {
   const [welcomeMessage, setWelcomeMessage] = useState("Thank you for calling Europcar South Africa. This is Luna, your virtual assistant. I'm here to help you with your car rental needs.");
   const [reEngageMessages, setReEngageMessages] = useState([
     { time: 30, message: "Are you still there?" },
     { time: 30, message: "" }
   ]);
   const [closingMessage, setClosingMessage] = useState("Thank you for choosing Europcar South Africa. Your booking has been confirmed. We look forward to serving you! Have a great day!");
+
+  useEffect(() => {
+    if (initialConfig) {
+      setWelcomeMessage(initialConfig.welcomeMessage);
+      setReEngageMessages(initialConfig.reEngageMessages);
+      setClosingMessage(initialConfig.closingMessage);
+    }
+  }, [initialConfig, open]);
 
   const addReEngageMessage = () => {
     setReEngageMessages([...reEngageMessages, { time: 30, message: "" }]);

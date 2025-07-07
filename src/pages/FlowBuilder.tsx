@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useState, useEffect } from 'react';
 import {
   ReactFlow,
   MiniMap,
@@ -11,12 +11,17 @@ import {
   Edge,
   Node,
   BackgroundVariant,
+  NodeMouseHandler,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Folder, Save, Play, Plus, Download } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Folder, Save, Play, Plus, Download, Trash2, X } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { apiService, Bot as BotType } from "@/services/api";
 
 // Initial nodes and edges
 const initialNodes: Node[] = [
@@ -85,39 +90,56 @@ const initialEdges: Edge[] = [
   },
 ];
 
-// Available bots that can be added to the flow
-const availableBots = [
-  { id: 'data-analyst', name: 'Data Analyst Bot', color: 'hsl(217 91% 60%)' },
-  { id: 'content-writer', name: 'Content Writer Bot', color: 'hsl(262 83% 58%)' },
-  { id: 'api-integration', name: 'API Integration Bot', color: 'hsl(142 76% 36%)' },
-  { id: 'seo-optimizer', name: 'SEO Optimizer Bot', color: 'hsl(38 92% 50%)' },
-  { id: 'image-generator', name: 'Image Generator Bot', color: 'hsl(0 72% 51%)' },
-];
-
 const FlowBuilder = () => {
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
   const [selectedBot, setSelectedBot] = useState<string | null>(null);
+  const [availableBots, setAvailableBots] = useState<BotType[]>([]);
+  const [flowName, setFlowName] = useState("Untitled Flow");
+  const [selectedNode, setSelectedNode] = useState<string | null>(null);
+  const { toast } = useToast();
+
+  useEffect(() => {
+    loadAvailableBots();
+  }, []);
+
+  const loadAvailableBots = () => {
+    const bots = apiService.getBots();
+    setAvailableBots(bots);
+  };
+
+  const getNodeColor = (index: number) => {
+    const colors = [
+      'hsl(217 91% 60%)',
+      'hsl(262 83% 58%)',
+      'hsl(142 76% 36%)',
+      'hsl(38 92% 50%)',
+      'hsl(0 72% 51%)'
+    ];
+    return colors[index % colors.length];
+  };
 
   const onConnect = useCallback(
     (params: Connection) => setEdges((eds) => addEdge(params, eds)),
     [setEdges],
   );
 
-  const addBotToFlow = (bot: typeof availableBots[0]) => {
+  const addBotToFlow = (bot: BotType, index: number) => {
     const newId = `${bot.id}-${Date.now()}`;
+    const color = getNodeColor(index);
     const newNode: Node = {
       id: newId,
       type: 'default',
       position: { x: Math.random() * 400, y: Math.random() * 300 },
       data: { 
         label: bot.name,
-        description: 'Bot instance'
+        description: bot.description,
+        botId: bot.id
       },
       style: {
-        background: bot.color,
+        background: color,
         color: 'white',
-        border: `1px solid ${bot.color}`,
+        border: `1px solid ${color}`,
         borderRadius: '8px',
         padding: '10px',
       }
@@ -126,19 +148,59 @@ const FlowBuilder = () => {
     setNodes((nds) => [...nds, newNode]);
   };
 
-  const saveFlow = () => {
-    const flowData = {
-      nodes,
-      edges,
-      timestamp: new Date().toISOString()
-    };
-    console.log('Saving flow:', flowData);
-    // TODO: Implement save functionality
+  const removeNode = (nodeId: string) => {
+    setNodes((nds) => nds.filter(node => node.id !== nodeId));
+    setEdges((eds) => eds.filter(edge => edge.source !== nodeId && edge.target !== nodeId));
+    setSelectedNode(null);
   };
 
-  const runFlow = () => {
-    console.log('Running flow with nodes:', nodes.length, 'edges:', edges.length);
-    // TODO: Implement flow execution
+  const onNodeClick: NodeMouseHandler = (event, node) => {
+    setSelectedNode(node.id);
+  };
+
+  const saveFlow = async () => {
+    try {
+      const flowData = {
+        name: flowName,
+        nodes,
+        edges
+      };
+      await apiService.saveFlow(flowData);
+      toast({
+        title: "Flow Saved",
+        description: `Flow "${flowName}" has been saved successfully!`,
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to save flow. Please try again.",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const runFlow = async () => {
+    try {
+      // Mock flow execution
+      toast({
+        title: "Flow Execution Started",
+        description: `Running flow with ${nodes.length} nodes and ${edges.length} connections.`,
+      });
+      
+      // Simulate execution time
+      setTimeout(() => {
+        toast({
+          title: "Flow Completed",
+          description: "Flow execution completed successfully!",
+        });
+      }, 2000);
+    } catch (error) {
+      toast({
+        title: "Execution Failed",
+        description: "Flow execution failed. Please check your configuration.",
+        variant: "destructive"
+      });
+    }
   };
 
   const exportFlow = () => {
@@ -166,6 +228,18 @@ const FlowBuilder = () => {
           </div>
         </div>
 
+        {/* Flow Name */}
+        <div className="space-y-2">
+          <Label htmlFor="flow-name">Flow Name</Label>
+          <Input
+            id="flow-name"
+            value={flowName}
+            onChange={(e) => setFlowName(e.target.value)}
+            placeholder="Enter flow name..."
+            className="h-9"
+          />
+        </div>
+
         {/* Actions */}
         <div className="flex gap-2">
           <Button onClick={saveFlow} size="sm" className="flex-1 gap-1">
@@ -190,22 +264,32 @@ const FlowBuilder = () => {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-2">
-            {availableBots.map((bot) => (
-              <div
-                key={bot.id}
-                className="flex items-center justify-between p-3 rounded-lg border border-border hover:bg-accent/50 cursor-pointer transition-colors"
-                onClick={() => addBotToFlow(bot)}
-              >
-                <div className="flex items-center gap-3">
-                  <div 
-                    className="w-4 h-4 rounded-full"
-                    style={{ backgroundColor: bot.color }}
-                  />
-                  <span className="text-sm font-medium">{bot.name}</span>
-                </div>
-                <Plus className="w-4 h-4 text-muted-foreground" />
+            {availableBots.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                <p className="text-sm">No bots available</p>
+                <p className="text-xs mt-1">Create a bot first to add it to your flow</p>
               </div>
-            ))}
+            ) : (
+              availableBots.map((bot, index) => (
+                <div
+                  key={bot.id}
+                  className="flex items-center justify-between p-3 rounded-lg border border-border hover:bg-accent/50 cursor-pointer transition-colors"
+                  onClick={() => addBotToFlow(bot, index)}
+                >
+                  <div className="flex items-center gap-3">
+                    <div 
+                      className="w-4 h-4 rounded-full"
+                      style={{ backgroundColor: getNodeColor(index) }}
+                    />
+                    <div className="flex-1 min-w-0">
+                      <span className="text-sm font-medium block truncate">{bot.name}</span>
+                      <span className="text-xs text-muted-foreground block truncate">{bot.description}</span>
+                    </div>
+                  </div>
+                  <Plus className="w-4 h-4 text-muted-foreground shrink-0" />
+                </div>
+              ))
+            )}
           </CardContent>
         </Card>
 
@@ -230,6 +314,26 @@ const FlowBuilder = () => {
           </CardContent>
         </Card>
 
+        {/* Selected Node Actions */}
+        {selectedNode && (
+          <Card className="shadow-card">
+            <CardHeader>
+              <CardTitle className="text-lg">Node Actions</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => removeNode(selectedNode)}
+                className="w-full gap-2"
+              >
+                <Trash2 className="w-4 h-4" />
+                Remove Selected Node
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+
         {/* Instructions */}
         <Card className="shadow-card">
           <CardHeader>
@@ -237,6 +341,7 @@ const FlowBuilder = () => {
           </CardHeader>
           <CardContent className="space-y-2 text-sm text-muted-foreground">
             <p>• Click bots above to add them to the flow</p>
+            <p>• Click on nodes to select them</p>
             <p>• Drag nodes to reposition them</p>
             <p>• Connect nodes by dragging from one to another</p>
             <p>• Use controls to zoom and pan</p>
@@ -253,6 +358,7 @@ const FlowBuilder = () => {
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
+          onNodeClick={onNodeClick}
           fitView
           attributionPosition="top-right"
         >

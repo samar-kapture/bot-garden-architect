@@ -1,44 +1,30 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Book, Search, Edit, Trash2, Play, Copy, Bot } from "lucide-react";
-
-// Mock data for demonstration
-const mockBots = [
-  {
-    id: "1",
-    name: "Data Analyst Bot",
-    description: "Analyzes datasets and generates insights with custom Python tools",
-    systemPrompt: "You are a data analyst bot specialized in statistical analysis...",
-    tools: ["data_analyzer", "chart_generator", "statistical_tests"],
-    createdAt: "2024-01-15",
-    lastModified: "2024-01-20"
-  },
-  {
-    id: "2", 
-    name: "Content Writer Bot",
-    description: "Creates engaging content with SEO optimization tools",
-    systemPrompt: "You are a creative content writer focused on engagement...",
-    tools: ["seo_optimizer", "grammar_checker", "tone_analyzer"],
-    createdAt: "2024-01-10",
-    lastModified: "2024-01-18"
-  },
-  {
-    id: "3",
-    name: "API Integration Bot", 
-    description: "Handles complex API integrations and data transformations",
-    systemPrompt: "You are an API integration specialist...",
-    tools: ["api_caller", "data_transformer", "webhook_handler"],
-    createdAt: "2024-01-05",
-    lastModified: "2024-01-22"
-  }
-];
+import { useToast } from "@/hooks/use-toast";
+import { apiService, Bot as BotType, Tool } from "@/services/api";
 
 const BotLibrary = () => {
   const [searchQuery, setSearchQuery] = useState("");
-  const [bots] = useState(mockBots);
+  const [bots, setBots] = useState<BotType[]>([]);
+  const [tools, setTools] = useState<Tool[]>([]);
+  const { toast } = useToast();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const loadData = () => {
+    const allBots = apiService.getBots();
+    const allTools = apiService.getTools();
+    setBots(allBots);
+    setTools(allTools);
+  };
 
   const filteredBots = bots.filter(bot =>
     bot.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -46,23 +32,80 @@ const BotLibrary = () => {
   );
 
   const handleEditBot = (botId: string) => {
-    console.log("Edit bot:", botId);
-    // TODO: Navigate to bot editor
+    navigate(`/create?edit=${botId}`);
   };
 
-  const handleDeleteBot = (botId: string) => {
-    console.log("Delete bot:", botId);
-    // TODO: Delete bot with confirmation
+  const handleDeleteBot = async (botId: string) => {
+    try {
+      await apiService.deleteBot(botId);
+      loadData();
+      toast({
+        title: "Bot Deleted",
+        description: "Bot has been successfully deleted.",
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to delete bot. Please try again.",
+        variant: "destructive"
+      });
+    }
   };
 
-  const handleTestBot = (botId: string) => {
-    console.log("Test bot:", botId);
-    // TODO: Test bot functionality
+  const handleTestBot = async (botId: string) => {
+    try {
+      await apiService.testBot(botId, { input: 'test' });
+      toast({
+        title: "Bot Test Successful",
+        description: "Your bot is working correctly!",
+      });
+    } catch (error) {
+      toast({
+        title: "Test Failed",
+        description: "Bot testing failed. Please check your configuration.",
+        variant: "destructive"
+      });
+    }
   };
 
-  const handleCloneBot = (botId: string) => {
-    console.log("Clone bot:", botId);
-    // TODO: Clone bot to creator
+  const handleCloneBot = async (botId: string) => {
+    try {
+      const originalBot = apiService.getBotById(botId);
+      if (originalBot) {
+        const clonedBot = {
+          ...originalBot,
+          name: `${originalBot.name} (Copy)`,
+        };
+        delete (clonedBot as any).id;
+        delete (clonedBot as any).createdAt;
+        delete (clonedBot as any).updatedAt;
+        
+        await apiService.createBot(clonedBot);
+        loadData();
+        toast({
+          title: "Bot Cloned",
+          description: "Bot has been successfully cloned.",
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to clone bot. Please try again.",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const getBotTools = (bot: BotType) => {
+    return tools.filter(tool => bot.functions.includes(tool.id));
+  };
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric'
+    });
   };
 
   return (
@@ -78,9 +121,11 @@ const BotLibrary = () => {
             <p className="text-muted-foreground">Manage and organize your created bots</p>
           </div>
         </div>
-        <Button className="gap-2" onClick={() => window.location.href = '/create'}>
-          <Bot className="w-4 h-4" />
-          Create Bot
+        <Button asChild className="gap-2">
+          <Link to="/create">
+            <Bot className="w-4 h-4" />
+            Create Bot
+          </Link>
         </Button>
       </div>
 
@@ -131,7 +176,7 @@ const BotLibrary = () => {
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Total Tools</p>
                 <p className="text-2xl font-bold">
-                  {bots.reduce((acc, bot) => acc + bot.tools.length, 0)}
+                  {bots.reduce((acc, bot) => acc + bot.functions.length, 0)}
                 </p>
               </div>
               <Edit className="w-8 h-8 text-info" />
@@ -144,7 +189,9 @@ const BotLibrary = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Last Updated</p>
-                <p className="text-sm font-bold">Jan 22, 2024</p>
+                <p className="text-sm font-bold">
+                  {bots.length > 0 ? formatDate(Math.max(...bots.map(b => new Date(b.updatedAt).getTime())).toString()) : 'N/A'}
+                </p>
               </div>
               <Book className="w-8 h-8 text-warning" />
             </div>
@@ -170,16 +217,16 @@ const BotLibrary = () => {
             <CardContent className="space-y-4">
               {/* Tools */}
               <div>
-                <p className="text-sm font-medium mb-2">Tools ({bot.tools.length})</p>
+                <p className="text-sm font-medium mb-2">Tools ({bot.functions.length})</p>
                 <div className="flex flex-wrap gap-1">
-                  {bot.tools.slice(0, 3).map((tool) => (
-                    <Badge key={tool} variant="secondary" className="text-xs">
-                      {tool}
+                  {getBotTools(bot).slice(0, 3).map((tool) => (
+                    <Badge key={tool.id} variant="secondary" className="text-xs">
+                      {tool.name}
                     </Badge>
                   ))}
-                  {bot.tools.length > 3 && (
+                  {bot.functions.length > 3 && (
                     <Badge variant="outline" className="text-xs">
-                      +{bot.tools.length - 3} more
+                      +{bot.functions.length - 3} more
                     </Badge>
                   )}
                 </div>
@@ -187,8 +234,8 @@ const BotLibrary = () => {
 
               {/* Metadata */}
               <div className="text-xs text-muted-foreground space-y-1">
-                <p>Created: {bot.createdAt}</p>
-                <p>Modified: {bot.lastModified}</p>
+                <p>Created: {formatDate(bot.createdAt)}</p>
+                <p>Modified: {formatDate(bot.updatedAt)}</p>
               </div>
 
               {/* Actions */}
@@ -245,7 +292,9 @@ const BotLibrary = () => {
               }
             </p>
             {!searchQuery && (
-              <Button>Create Your First Bot</Button>
+              <Button asChild>
+                <Link to="/create">Create Your First Bot</Link>
+              </Button>
             )}
           </CardContent>
         </Card>

@@ -397,6 +397,7 @@ const BotCreator = () => {
         open={showMessageDialog}
         onOpenChange={setShowMessageDialog}
         onSave={handleMessageConfig}
+        initialConfig={messageConfig}
       />
 
       <PromptDialog
