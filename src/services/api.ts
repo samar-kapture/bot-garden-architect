@@ -33,7 +33,6 @@ export interface FlowData {
 // Mock API service with localStorage persistence
 class ApiService {
   private baseUrl = 'http://localhost:3000/api'; // Will be replaced with actual API
-  private initialized = false;
   
   // Bot Management
   async createBot(botData: Omit<Bot, 'id' | 'createdAt' | 'updatedAt'>): Promise<Bot> {
@@ -68,7 +67,6 @@ class ApiService {
   }
 
   getBots(): Bot[] {
-    this.ensureInitialized();
     const bots = localStorage.getItem('bots');
     return bots ? JSON.parse(bots) : [];
   }
@@ -117,7 +115,6 @@ class ApiService {
   }
 
   getTools(): Tool[] {
-    this.ensureInitialized();
     const tools = localStorage.getItem('tools');
     return tools ? JSON.parse(tools) : [];
   }
@@ -193,179 +190,6 @@ class ApiService {
 
   private generateId(): string {
     return 'id_' + Math.random().toString(36).substr(2, 9) + Date.now().toString(36);
-  }
-
-  private ensureInitialized() {
-    if (this.initialized) return;
-    
-    console.log('Initializing API service...');
-    
-    // Check if data already exists
-    const existingBots = localStorage.getItem('bots');
-    const existingTools = localStorage.getItem('tools');
-    
-    console.log('Existing bots:', existingBots);
-    console.log('Existing tools:', existingTools);
-    
-    // Initialize with sample data if empty
-    if (!existingBots || JSON.parse(existingBots).length === 0) {
-      console.log('Initializing sample bots...');
-      this.initializeSampleBots();
-    }
-    
-    if (!existingTools || JSON.parse(existingTools).length === 0) {
-      console.log('Initializing sample tools...');
-      this.initializeSampleTools();
-    }
-    
-    this.initialized = true;
-    console.log('API service initialized!');
-  }
-
-  private initializeSampleBots() {
-    const sampleBots = [
-      {
-        id: this.generateId(),
-        name: "Customer Support Assistant",
-        description: "Intelligent assistant for handling customer inquiries and support tickets with natural language processing.",
-        functions: [],
-        selectedModel: "OpenAI",
-        agentPrompt: "You are a helpful customer support assistant. Be polite, professional, and provide accurate information to resolve customer issues efficiently.",
-        messageConfig: {
-          welcomeMessage: "Hello! I'm your customer support assistant. How can I help you today?",
-          reEngageMessages: [
-            { time: 30, message: "Are you still there? I'm here to help." },
-            { time: 60, message: "Is there anything else I can assist you with?" }
-          ],
-          closingMessage: "Thank you for contacting us. Have a great day!"
-        },
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      },
-      {
-        id: this.generateId(),
-        name: "Data Analysis Bot",
-        description: "Advanced AI agent for analyzing datasets, generating insights, and creating visualizations from complex data.",
-        functions: [],
-        selectedModel: "Gemini",
-        agentPrompt: "You are a data analyst assistant. Provide clear insights, identify patterns, and make data-driven recommendations with detailed explanations.",
-        messageConfig: {
-          welcomeMessage: "Welcome! I'm your data analysis assistant. Let's explore your data together.",
-          reEngageMessages: [
-            { time: 45, message: "Would you like me to continue with the analysis?" }
-          ],
-          closingMessage: "Analysis complete. Feel free to return for more insights!"
-        },
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      },
-      {
-        id: this.generateId(),
-        name: "Sales Automation Agent",
-        description: "AI-powered sales assistant that manages leads, follows up with prospects, and automates sales workflows.",
-        functions: [],
-        selectedModel: "Deepseek",
-        agentPrompt: "You are a sales assistant focused on helping qualify leads and supporting the sales process. Be engaging and persuasive while maintaining professionalism.",
-        messageConfig: {
-          welcomeMessage: "Hi there! I'm here to help you with your sales inquiries.",
-          reEngageMessages: [
-            { time: 30, message: "Can I help you find the right solution?" }
-          ],
-          closingMessage: "Thanks for your interest! Our team will follow up with you soon."
-        },
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      }
-    ];
-
-    localStorage.setItem('bots', JSON.stringify(sampleBots));
-  }
-
-  private initializeSampleTools() {
-    const sampleTools = [
-      {
-        id: this.generateId(),
-        name: "Email Sender",
-        description: "Sends formatted emails to specified recipients with customizable templates and attachments.",
-        code: `async function sendEmail(to, subject, body, attachments = []) {
-  // Email sending implementation
-  try {
-    const emailData = {
-      to: to,
-      subject: subject,
-      html: body,
-      attachments: attachments
-    };
-    
-    console.log('Sending email:', emailData);
-    
-    // Simulate email sending
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    return {
-      success: true,
-      messageId: 'msg_' + Date.now(),
-      message: 'Email sent successfully'
-    };
-  } catch (error) {
-    return {
-      success: false,
-      error: error.message
-    };
-  }
-}`,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      },
-      {
-        id: this.generateId(),
-        name: "Data Validator",
-        description: "Validates and sanitizes input data according to specified schemas and business rules.",
-        code: `function validateData(data, schema = {}) {
-  // Data validation implementation
-  const errors = [];
-  
-  if (!data || typeof data !== 'object') {
-    return { 
-      valid: false, 
-      errors: ['Invalid data format - expected object'] 
-    };
-  }
-  
-  // Check required fields
-  if (schema.required) {
-    schema.required.forEach(field => {
-      if (!(field in data) || data[field] === null || data[field] === undefined) {
-        errors.push(\`Missing required field: \${field}\`);
-      }
-    });
-  }
-  
-  // Validate field types
-  if (schema.fields) {
-    Object.keys(schema.fields).forEach(field => {
-      if (field in data) {
-        const expectedType = schema.fields[field];
-        const actualType = typeof data[field];
-        if (actualType !== expectedType) {
-          errors.push(\`Field \${field} should be \${expectedType}, got \${actualType}\`);
-        }
-      }
-    });
-  }
-  
-  return {
-    valid: errors.length === 0,
-    errors: errors,
-    data: data
-  };
-}`,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      }
-    ];
-
-    localStorage.setItem('tools', JSON.stringify(sampleTools));
   }
 }
 

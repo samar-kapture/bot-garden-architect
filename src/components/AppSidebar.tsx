@@ -20,12 +20,6 @@ const navigationItems = [
     description: "Browse and manage your created bots"
   },
   {
-    title: "Create Bot",
-    url: "/create",
-    icon: Bot,
-    description: "Build new intelligent agents"
-  },
-  {
     title: "Flow Builder",
     url: "/flow",
     icon: Folder,
