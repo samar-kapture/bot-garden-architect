@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { API_BASE_URL } from "@/config";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -6,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Plus, Settings, Search, Edit, Trash2 } from "lucide-react";
-import { apiService, Tool } from "@/services/api";
+import { apiService } from "@/services/api";
 import { FunctionDialog } from "@/components/FunctionDialog";
 
 interface ToolLibraryProps {
@@ -17,10 +18,18 @@ interface ToolLibraryProps {
 }
 
 export const ToolLibrary = ({ open, onOpenChange, selectedTools, onToolSelectionChange }: ToolLibraryProps) => {
-  const [tools, setTools] = useState<Tool[]>([]);
+  // Use the API response shape directly
+  const [tools, setTools] = useState<any[]>([]);
+  // Track deployment status for tools being added
+  const [deployingTools, setDeployingTools] = useState<{ [task_id: string]: any }>({});
+  // Track deleting status for tools
+  const [deletingTools, setDeletingTools] = useState<{ [tool_id: string]: boolean }>({});
   const [searchQuery, setSearchQuery] = useState("");
   const [showFunctionDialog, setShowFunctionDialog] = useState(false);
-  const [editingTool, setEditingTool] = useState<Tool | null>(null);
+  const [editingTool, setEditingTool] = useState<any | null>(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [toolToDelete, setToolToDelete] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     if (open) {
@@ -28,38 +37,75 @@ export const ToolLibrary = ({ open, onOpenChange, selectedTools, onToolSelection
     }
   }, [open]);
 
-  const loadTools = () => {
-    const allTools = apiService.getTools();
-    setTools(allTools);
-  };
-
-  const filteredTools = tools.filter(tool =>
-    tool.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    tool.description.toLowerCase().includes(searchQuery.toLowerCase())
-  );
-
-  const handleToolToggle = (toolId: string) => {
-    const newSelection = selectedTools.includes(toolId)
-      ? selectedTools.filter(id => id !== toolId)
-      : [...selectedTools, toolId];
-    onToolSelectionChange(newSelection);
-  };
-
-  const handleCreateTool = async (toolData: { name: string; description: string; code: string }) => {
+  const loadTools = async () => {
     try {
-      await apiService.createTool(toolData);
+      const res = await fetch(`${API_BASE_URL}/multiagent-core/tools/clients/kapture/tools/`, {
+        headers: { 'accept': 'application/json' }
+      });
+      if (!res.ok) throw new Error('Failed to fetch tools');
+      const data = await res.json();
+      // Always expect an array of tool objects with new API fields
+      const toolsArr = Array.isArray(data?.tools) ? data.tools : Array.isArray(data) ? data : [];
+      setTools(toolsArr);
+    } catch (e) {
+      setTools([]);
+    }
+  };
+
+  // Poll deployment status for a tool
+  const pollDeployStatus = (tool: any) => {
+    if (!tool.task_id) return;
+    setDeployingTools(prev => ({ ...prev, [tool.task_id]: { ...tool, status: 'deploying' } }));
+    const poll = async () => {
+      try {
+        const res = await fetch(`${API_BASE_URL}/multiagent-core/celery-tasks/deploy-status/${tool.task_id}`);
+        const data = await res.json();
+        if (data.state === 'SUCCESS') {
+          setDeployingTools(prev => {
+            const copy = { ...prev };
+            // Mark as deployed for a short time before removing
+            copy[tool.task_id] = { ...tool, status: 'deployed' };
+            setTimeout(() => {
+              setDeployingTools(prev2 => {
+                const copy2 = { ...prev2 };
+                delete copy2[tool.task_id];
+                return copy2;
+              });
+            }, 2000); // Show 'Deployed' for 2 seconds
+            return copy;
+          });
+          // Reload tools from backend
+          loadTools();
+        } else if (data.state === 'FAILURE') {
+          setDeployingTools(prev => ({ ...prev, [tool.task_id]: { ...tool, status: 'error', error: data.error || 'Deployment failed' } }));
+        } else {
+          // Still deploying, keep polling
+          setTimeout(poll, 10000); // 10 seconds
+        }
+      } catch (e) {
+        setDeployingTools(prev => ({ ...prev, [tool.task_id]: { ...tool, status: 'error', error: 'Failed to check deployment status' } }));
+      }
+    };
+    setTimeout(poll, 10000); // 10 seconds
+  };
+
+  // toolData may include task_id, original_name, status
+  const handleCreateTool = (toolData: any) => {
+    setShowFunctionDialog(false);
+    if (toolData.task_id) {
+      // Add to deployingTools and start polling
+      setDeployingTools(prev => ({ ...prev, [toolData.task_id]: toolData }));
+      pollDeployStatus(toolData);
+    } else {
+      // fallback: reload tools
       loadTools();
-      setShowFunctionDialog(false);
-    } catch (error) {
-      console.error('Error creating tool:', error);
     }
   };
 
   const handleUpdateTool = async (toolData: { name: string; description: string; code: string }) => {
     if (!editingTool) return;
-    
     try {
-      await apiService.updateTool(editingTool.id, toolData);
+      await apiService.updateTool(editingTool.tool_id, toolData);
       loadTools();
       setShowFunctionDialog(false);
       setEditingTool(null);
@@ -68,20 +114,54 @@ export const ToolLibrary = ({ open, onOpenChange, selectedTools, onToolSelection
     }
   };
 
-  const handleDeleteTool = async (toolId: string) => {
+  const confirmDeleteTool = (toolId: string) => {
+    setToolToDelete(toolId);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleDeleteTool = async () => {
+    if (!toolToDelete) return;
+    setDeleting(true);
+    setDeleteDialogOpen(false); // Close the dialog immediately
+    setDeletingTools(prev => ({ ...prev, [toolToDelete]: true }));
     try {
-      await apiService.deleteTool(toolId);
-      loadTools();
-      // Remove from selection if it was selected
-      if (selectedTools.includes(toolId)) {
-        onToolSelectionChange(selectedTools.filter(id => id !== toolId));
+      const res = await fetch(`${API_BASE_URL}/multiagent-core/tools/clients/kapture/tools`, {
+        method: 'DELETE',
+        headers: {
+          'accept': 'application/json',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify([toolToDelete]),
+      });
+      if (!res.ok) throw new Error('Failed to delete tool');
+      await res.json();
+      setToolToDelete(null);
+      // Keep the deleting overlay for a short time after delete
+      setTimeout(() => {
+        setDeletingTools(prev => {
+          const copy = { ...prev };
+          delete copy[toolToDelete];
+          return copy;
+        });
+        loadTools();
+      }, 2000); // Show 'Deleting...' for 2 seconds
+      if (selectedTools.includes(toolToDelete)) {
+        onToolSelectionChange(selectedTools.filter(id => id !== toolToDelete));
       }
     } catch (error) {
+      setToolToDelete(null);
+      setDeletingTools(prev => {
+        const copy = { ...prev };
+        delete copy[toolToDelete];
+        return copy;
+      });
       console.error('Error deleting tool:', error);
+    } finally {
+      setDeleting(false);
     }
   };
 
-  const handleEditTool = (tool: Tool) => {
+  const handleEditTool = (tool: any) => {
     setEditingTool(tool);
     setShowFunctionDialog(true);
   };
@@ -96,6 +176,24 @@ export const ToolLibrary = ({ open, onOpenChange, selectedTools, onToolSelection
     });
   };
 
+  // Merge deploying tools (not yet in backend) with loaded tools
+  const allTools = [
+    ...Object.values(deployingTools),
+    ...tools.filter(t => !Object.values(deployingTools).some(dt => dt.original_name === t.original_name)),
+  ];
+
+  const filteredTools = allTools.filter(tool =>
+    (tool.original_name?.toLowerCase() || '').includes(searchQuery.toLowerCase()) ||
+    (tool.description?.toLowerCase() || '').includes(searchQuery.toLowerCase())
+  );
+
+  const handleToolToggle = (toolId: string) => {
+    const newSelection = selectedTools.includes(toolId)
+      ? selectedTools.filter(id => id !== toolId)
+      : [...selectedTools, toolId];
+    onToolSelectionChange(newSelection);
+  };
+
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
@@ -106,7 +204,6 @@ export const ToolLibrary = ({ open, onOpenChange, selectedTools, onToolSelection
               Tool Library
             </DialogTitle>
           </DialogHeader>
-          
           <div className="flex flex-col h-full">
             {/* Header Actions */}
             <div className="flex items-center justify-between gap-4 mb-4">
@@ -141,54 +238,98 @@ export const ToolLibrary = ({ open, onOpenChange, selectedTools, onToolSelection
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {filteredTools.map((tool) => (
-                    <Card key={tool.id} className="relative">
-                      <CardHeader className="pb-3">
-                        <div className="flex items-start justify-between">
-                          <div className="flex items-center gap-3">
-                            <Checkbox
-                              checked={selectedTools.includes(tool.id)}
-                              onCheckedChange={() => handleToolToggle(tool.id)}
-                            />
-                            <div className="min-w-0 flex-1">
-                              <CardTitle className="text-base truncate">{tool.name}</CardTitle>
-                              <CardDescription className="text-sm mt-1 line-clamp-2">
-                                {tool.description}
-                              </CardDescription>
+                  {filteredTools.map((tool) => {
+                    const isDeploying = tool.status === 'deploying';
+                    const isDeployed = tool.status === 'deployed';
+                    const isError = tool.status === 'error';
+                    const isDeleting = deletingTools[tool.tool_id];
+                    return (
+                      <Card key={tool.tool_id || tool.task_id || tool.original_name} className={`relative ${(isDeploying || isDeleting) ? 'opacity-60 pointer-events-none' : ''}`}>
+                        {isDeploying && (
+                          <div className="absolute inset-0 bg-gray-200 bg-opacity-70 flex flex-col items-center justify-center z-10">
+                            <span className="animate-spin rounded-full h-6 w-6 border-t-2 border-b-2 border-gray-500 mb-2"></span>
+                            <span className="text-xs text-gray-700">Deploying...</span>
+                          </div>
+                        )}
+                        {isDeployed && (
+                          <div className="absolute inset-0 bg-green-100 bg-opacity-80 flex flex-col items-center justify-center z-10">
+                            <span className="text-xs text-green-700 font-semibold">Deployed</span>
+                          </div>
+                        )}
+                        {isDeleting && (
+                          <div className="absolute inset-0 bg-gray-200 bg-opacity-70 flex flex-col items-center justify-center z-10">
+                            <span className="animate-spin rounded-full h-6 w-6 border-t-2 border-b-2 border-gray-500 mb-2"></span>
+                            <span className="text-xs text-gray-700">Deleting...</span>
+                          </div>
+                        )}
+                        {isError && (
+                          <div className="absolute inset-0 bg-red-100 bg-opacity-80 flex flex-col items-center justify-center z-10">
+                            <span className="text-xs text-red-700 font-semibold">Deployment Failed</span>
+                            <span className="text-xs text-red-500">{tool.error}</span>
+                          </div>
+                        )}
+                        <CardHeader className="pb-3">
+                          <div className="flex items-start justify-between">
+                            <div className="flex items-center gap-3">
+                              <Checkbox
+                                checked={selectedTools.includes(tool.tool_id)}
+                                onCheckedChange={() => handleToolToggle(tool.tool_id)}
+                                disabled={isDeploying || isError || isDeleting}
+                              />
+                              <div className="min-w-0 flex-1">
+                                <CardTitle className="text-base truncate">{tool.original_name}</CardTitle>
+                                <CardDescription className="text-sm mt-1 line-clamp-2">
+                                  {tool.description}
+                                </CardDescription>
+                              </div>
+                            </div>
+                            <div className="flex gap-1 ml-2">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleEditTool(tool)}
+                                className="p-1 h-6 w-6"
+                                disabled={isDeploying || isError || isDeleting}
+                              >
+                                <Edit className="w-3 h-3" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => confirmDeleteTool(tool.tool_id)}
+                                className="p-1 h-6 w-6 text-destructive hover:text-destructive"
+                                disabled={deleting || isDeploying || isError || isDeleting}
+                              >
+                                <Trash2 className="w-3 h-3" />
+                              </Button>
                             </div>
                           </div>
-                          <div className="flex gap-1 ml-2">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleEditTool(tool)}
-                              className="p-1 h-6 w-6"
-                            >
-                              <Edit className="w-3 h-3" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleDeleteTool(tool.id)}
-                              className="p-1 h-6 w-6 text-destructive hover:text-destructive"
-                            >
-                              <Trash2 className="w-3 h-3" />
-                            </Button>
+                        </CardHeader>
+                        <CardContent className="pt-0">
+                          <div className="flex items-center justify-between text-xs text-muted-foreground">
+                            <span>Created: {tool.created_at ? formatDate(tool.created_at) : 'Just now'}</span>
+                            {tool.updated_at && tool.updated_at !== tool.created_at && (
+                              <Badge variant="outline" className="text-xs">
+                                Updated
+                              </Badge>
+                            )}
+                            {isDeploying && (
+                              <Badge variant="secondary" className="text-xs">Deploying</Badge>
+                            )}
+                            {isDeployed && (
+                              <Badge variant="secondary" className="text-xs">Deployed</Badge>
+                            )}
+                            {isDeleting && (
+                              <Badge variant="secondary" className="text-xs">Deleting</Badge>
+                            )}
+                            {isError && (
+                              <Badge variant="destructive" className="text-xs">Error</Badge>
+                            )}
                           </div>
-                        </div>
-                      </CardHeader>
-                      <CardContent className="pt-0">
-                        <div className="flex items-center justify-between text-xs text-muted-foreground">
-                          <span>Created: {formatDate(tool.createdAt)}</span>
-                          {tool.updatedAt !== tool.createdAt && (
-                            <Badge variant="outline" className="text-xs">
-                              Updated
-                            </Badge>
-                          )}
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -205,13 +346,27 @@ export const ToolLibrary = ({ open, onOpenChange, selectedTools, onToolSelection
           </div>
         </DialogContent>
       </Dialog>
-
       <FunctionDialog
         open={showFunctionDialog}
         onOpenChange={setShowFunctionDialog}
         onSave={editingTool ? handleUpdateTool : handleCreateTool}
         initialTool={editingTool}
       />
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Tool?</DialogTitle>
+          </DialogHeader>
+          <div>Are you sure you want to delete this tool? This action cannot be undone.</div>
+          <div className="flex justify-end gap-2 mt-4">
+            <Button variant="outline" onClick={() => setDeleteDialogOpen(false)} disabled={deleting}>Cancel</Button>
+            <Button variant="destructive" onClick={handleDeleteTool} disabled={deleting}>
+              {deleting ? 'Deleting...' : 'Delete'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </>
   );
 };

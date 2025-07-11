@@ -21,7 +21,7 @@ const App = () => (
         <SidebarProvider>
           <div className="min-h-screen flex w-full">
             <AppSidebar />
-            <div className="flex-1 flex flex-col">
+            <div className="flex-1 flex flex-col ml-[35px]">
               <header className="h-12 flex items-center border-b border-border bg-card/50 backdrop-blur">
                 <SidebarTrigger className="ml-4" />
                 <div className="ml-4">

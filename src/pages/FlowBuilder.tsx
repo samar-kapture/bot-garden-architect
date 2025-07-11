@@ -1,4 +1,5 @@
 import { useCallback, useState, useEffect } from 'react';
+import { API_BASE_URL } from "@/config";
 import {
   ReactFlow,
   MiniMap,
@@ -26,69 +27,79 @@ import { apiService, Bot as BotType } from "@/services/api";
 // Initial nodes and edges
 const initialNodes: Node[] = [
   {
-    id: '1',
+    id: '__start__',
     type: 'default',
-    position: { x: 250, y: 5 },
-    data: { 
-      label: 'Data Analyst Bot',
-      description: 'Processes data input'
+    position: { x: 250, y: 0 },
+    data: {
+      label: 'START',
+      description: 'Start Node'
     },
     style: {
-      background: 'hsl(217 91% 60%)',
+      background: 'hsl(142, 76%, 36%)',
       color: 'white',
       border: '1px solid hsl(217 91% 50%)',
-      borderRadius: '8px',
+      borderRadius: '20px',
       padding: '10px',
     }
   },
   {
-    id: '2',
-    type: 'default', 
-    position: { x: 100, y: 100 },
-    data: { 
-      label: 'Content Writer Bot',
-      description: 'Generates content'
-    },
-    style: {
-      background: 'hsl(262 83% 58%)',
-      color: 'white', 
-      border: '1px solid hsl(262 83% 48%)',
-      borderRadius: '8px',
-      padding: '10px',
-    }
-  },
-  {
-    id: '3',
+    id: '__end__',
     type: 'default',
-    position: { x: 400, y: 100 },
-    data: { 
-      label: 'API Integration Bot',
-      description: 'Handles API calls'
+    position: { x: 250, y: 350 },
+    data: {
+      label: 'END',
+      description: 'END Node'
     },
     style: {
-      background: 'hsl(142 76% 36%)',
+      background: 'hsl(0, 72%, 51%)',
       color: 'white',
-      border: '1px solid hsl(142 76% 26%)', 
-      borderRadius: '8px',
+      border: '1px solid hsl(262 83% 48%)',
+      borderRadius: '20px',
       padding: '10px',
     }
-  },
+  }
 ];
 
-const initialEdges: Edge[] = [
-  { 
-    id: 'e1-2', 
-    source: '1', 
-    target: '2',
-    style: { stroke: 'hsl(217 91% 60%)' }
-  },
-  { 
-    id: 'e1-3', 
-    source: '1', 
-    target: '3',
-    style: { stroke: 'hsl(217 91% 60%)' }
-  },
-];
+const initialEdges: Edge[] = [];
+
+function buildBotStructure(nodes: Node[], edges: Edge[]): Record<string, string[]> {
+  const structure: Record<string, string[]> = {};
+
+  // Add all nodes to the structure with string keys, except the END node
+  nodes.forEach(node => {
+    if (node.data.label !== "END") {
+      structure[String(node.id)] = [];
+    }
+  });
+
+  // Add edges to the structure with string values, skip edges where source is END node
+  edges.forEach(edge => {
+    const source = String(edge.source);
+    const target = String(edge.target);
+    // Skip connections from END node
+    if (nodes.find(n => n.id === source && n.data.label === "END")) return;
+    if (!structure[source]) structure[source] = [];
+    structure[source].push(target);
+  });
+
+  // Find start and end nodes
+  const startNode = nodes.find(n => n.data.label === "START");
+  const endNode = nodes.find(n => n.data.label === "END");
+
+  // Add __start__ key
+  if (startNode) {
+    structure["__start__"] = structure[String(startNode.id)] || [];
+  }
+
+  // Replace end node id with __end__ in all connections
+  Object.keys(structure).forEach(key => {
+    structure[key] = structure[key].map(target =>
+      endNode && target === String(endNode.id) ? "__end__" : target
+    );
+  });
+
+  return structure;
+}
 
 const FlowBuilder = () => {
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
@@ -101,11 +112,30 @@ const FlowBuilder = () => {
 
   useEffect(() => {
     loadAvailableBots();
+    const handleFocus = () => loadAvailableBots();
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
   }, []);
 
-  const loadAvailableBots = () => {
-    const bots = apiService.getBots();
-    setAvailableBots(bots);
+  const loadAvailableBots = async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/multiagent-core/bot/clients/kapture/bots?skip=0&limit=100`, {
+        headers: { 'accept': 'application/json' }
+      });
+      const botsData = await res.json();
+      const botsArr = Array.isArray(botsData?.bots) ? botsData.bots : [];
+      setAvailableBots(botsArr.map(apiBot => ({
+        id: apiBot.bot_id,
+        name: apiBot.name,
+        description: apiBot.description,
+        agentPrompt: apiBot.final_prompt,
+        createdAt: apiBot.created_at,
+        updatedAt: apiBot.updated_at,
+        functions: [],
+      })));
+    } catch (e) {
+      setAvailableBots([]);
+    }
   };
 
   const getNodeColor = (index: number) => {
@@ -125,13 +155,13 @@ const FlowBuilder = () => {
   );
 
   const addBotToFlow = (bot: BotType, index: number) => {
-    const newId = `${bot.id}-${Date.now()}`;
+    const newId = bot.id; // Use the bot_id from API as node id
     const color = getNodeColor(index);
     const newNode: Node = {
       id: newId,
       type: 'default',
       position: { x: Math.random() * 400, y: Math.random() * 300 },
-      data: { 
+      data: {
         label: bot.name,
         description: bot.description,
         botId: bot.id
@@ -144,7 +174,7 @@ const FlowBuilder = () => {
         padding: '10px',
       }
     };
-    
+
     setNodes((nds) => [...nds, newNode]);
   };
 
@@ -160,12 +190,18 @@ const FlowBuilder = () => {
 
   const saveFlow = async () => {
     try {
-      const flowData = {
-        name: flowName,
-        nodes,
-        edges
-      };
-      await apiService.saveFlow(flowData);
+      const bot_structure = buildBotStructure(nodes, edges);
+      console.log(bot_structure)
+      await fetch(`${API_BASE_URL}/multiagent-core/graph_structure/bot-structure`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "accept": "application/json" },
+        body: JSON.stringify({
+          client_id: "kapture",
+          config_id: flowName,
+          structure: bot_structure,
+        }),
+      });
+
       toast({
         title: "Flow Saved",
         description: `Flow "${flowName}" has been saved successfully!`,
@@ -186,7 +222,7 @@ const FlowBuilder = () => {
         title: "Flow Execution Started",
         description: `Running flow with ${nodes.length} nodes and ${edges.length} connections.`,
       });
-      
+
       // Simulate execution time
       setTimeout(() => {
         toast({
@@ -263,7 +299,7 @@ const FlowBuilder = () => {
               Drag these bots into your workflow
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-2">
+          <CardContent className="space-y-2 max-h-120 overflow-auto">
             {availableBots.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
                 <p className="text-sm">No bots available</p>
@@ -274,16 +310,17 @@ const FlowBuilder = () => {
                 <div
                   key={bot.id}
                   className="flex items-center justify-between p-3 rounded-lg border border-border hover:bg-accent/50 cursor-pointer transition-colors"
+                  style={{ overflow: "hidden" }}
                   onClick={() => addBotToFlow(bot, index)}
                 >
                   <div className="flex items-center gap-3">
-                    <div 
+                    <div
                       className="w-4 h-4 rounded-full"
                       style={{ backgroundColor: getNodeColor(index) }}
                     />
                     <div className="flex-1 min-w-0">
-                      <span className="text-sm font-medium block truncate">{bot.name}</span>
-                      <span className="text-xs text-muted-foreground block truncate">{bot.description}</span>
+                      <span className="text-sm font-medium block break-words">{bot.name}</span>
+                      <span className="text-xs text-muted-foreground block break-words">{bot.description}</span>
                     </div>
                   </div>
                   <Plus className="w-4 h-4 text-muted-foreground shrink-0" />
@@ -309,7 +346,11 @@ const FlowBuilder = () => {
             </div>
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">Status:</span>
-              <span className="font-medium text-success">Ready</span>
+              {edges.length < 1 ? (
+                <span className="font-medium text-destructive">Not Ready</span>
+              ) : (
+                <span className="font-medium text-success">Ready</span>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -363,7 +404,7 @@ const FlowBuilder = () => {
           attributionPosition="top-right"
         >
           <Controls />
-          <MiniMap 
+          <MiniMap
             style={{
               height: 120,
               backgroundColor: 'hsl(var(--card))',
@@ -372,9 +413,9 @@ const FlowBuilder = () => {
             zoomable
             pannable
           />
-          <Background 
-            variant={BackgroundVariant.Dots} 
-            gap={20} 
+          <Background
+            variant={BackgroundVariant.Dots}
+            gap={20}
             size={1}
             color="hsl(var(--border))"
           />

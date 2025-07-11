@@ -141,3 +141,16 @@
     opacity: 1;
   }
 }
+
+.flow-canvas {
+  overflow: auto;
+  max-width: 100%;
+  max-height: 70vh; /* or whatever fits your layout */
+  box-sizing: border-box;
+}
+
+.flow-canvas canvas {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}

@@ -1,4 +1,7 @@
 import { useState, useEffect } from "react";
+import { API_BASE_URL } from "@/config";
+import { Dialog } from "@/components/ui/dialog";
+import { DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,36 +17,76 @@ const BotLibrary = () => {
   const [tools, setTools] = useState<Tool[]>([]);
   const { toast } = useToast();
   const navigate = useNavigate();
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [botToDelete, setBotToDelete] = useState<string | null>(null);
 
   useEffect(() => {
     loadData();
+    // Also refetch when coming back from create/edit page
+    const handleFocus = () => loadData();
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
   }, []);
 
-  const loadData = () => {
-    const allBots = apiService.getBots();
+  const loadData = async () => {
+    try {
+      // Fetch bots from API
+      const res = await fetch(`${API_BASE_URL}/multiagent-core/bot/clients/kapture/bots?skip=0&limit=100`, {
+        headers: { 'accept': 'application/json' }
+      });
+      const botsData = await res.json();
+      // The API returns { total, skip, limit, bots: [...] }
+      const botsArr = Array.isArray(botsData?.bots) ? botsData.bots : [];
+      // Map API bots to local BotType structure for display
+      setBots(botsArr.map(apiBot => ({
+        id: apiBot.bot_id,
+        name: apiBot.name,
+        description: apiBot.description,
+        agentPrompt: apiBot.final_prompt,
+        createdAt: apiBot.created_at,
+        updatedAt: apiBot.updated_at,
+        functions: [], // No tools info from API, so leave empty
+      })));
+    } catch (e) {
+      setBots([]);
+    }
+    // Still load tools from local apiService
     const allTools = apiService.getTools();
-    setBots(allBots);
     setTools(allTools);
   };
 
   const filteredBots = bots.filter(bot =>
-    bot.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    bot.description.toLowerCase().includes(searchQuery.toLowerCase())
+    (bot.name || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (bot.description || "").toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   const handleEditBot = (botId: string) => {
     navigate(`/create?edit=${botId}`);
   };
 
-  const handleDeleteBot = async (botId: string) => {
+  const confirmDeleteBot = (botId: string) => {
+    setBotToDelete(botId);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleDeleteBot = async () => {
+    if (!botToDelete) return;
     try {
-      await apiService.deleteBot(botId);
+      const res = await fetch(`${API_BASE_URL}/multiagent-core/bot/clients/kapture/bots/${botToDelete}`, {
+        method: 'DELETE',
+        headers: { 'accept': '*/*' }
+      });
+      if (!res.ok) throw new Error('Failed to delete bot');
+      setDeleteDialogOpen(false);
+      setBotToDelete(null);
       loadData();
       toast({
         title: "Bot Deleted",
         description: "Bot has been successfully deleted.",
       });
     } catch (error) {
+      setDeleteDialogOpen(false);
+      setBotToDelete(null);
       toast({
         title: "Error",
         description: "Failed to delete bot. Please try again.",
@@ -70,23 +113,22 @@ const BotLibrary = () => {
 
   const handleCloneBot = async (botId: string) => {
     try {
-      const originalBot = apiService.getBotById(botId);
-      if (originalBot) {
-        const clonedBot = {
-          ...originalBot,
-          name: `${originalBot.name} (Copy)`,
-        };
-        delete (clonedBot as any).id;
-        delete (clonedBot as any).createdAt;
-        delete (clonedBot as any).updatedAt;
-        
-        await apiService.createBot(clonedBot);
-        loadData();
-        toast({
-          title: "Bot Cloned",
-          description: "Bot has been successfully cloned.",
-        });
-      }
+      // Fetch the latest bot details from the API
+      const res = await fetch(`${API_BASE_URL}/multiagent-core/bot/clients/kapture/bots/${botId}`, {
+        headers: { 'accept': 'application/json' }
+      });
+      if (!res.ok) throw new Error('Failed to fetch bot');
+      const bot = await res.json();
+      // Remove id, createdAt, updatedAt so it will be treated as a new bot
+      const clonedBot = {
+        ...bot,
+        name: `${bot.name} (Copy)`
+      };
+      delete (clonedBot as any).bot_id;
+      delete (clonedBot as any).created_at;
+      delete (clonedBot as any).updated_at;
+      // Pass the cloned bot as state to the create page, and also pass the original botId for prefill
+      navigate('/create', { state: { bot: clonedBot, isClone: true, bot_id: botId } });
     } catch (error) {
       toast({
         title: "Error",
@@ -97,6 +139,8 @@ const BotLibrary = () => {
   };
 
   const getBotTools = (bot: BotType) => {
+    // If bot.functions is missing or empty, return []
+    if (!bot.functions || !Array.isArray(bot.functions)) return [];
     return tools.filter(tool => bot.functions.includes(tool.id));
   };
 
@@ -157,7 +201,7 @@ const BotLibrary = () => {
             </div>
           </CardContent>
         </Card>
-        
+
         <Card className="shadow-card">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
@@ -169,7 +213,7 @@ const BotLibrary = () => {
             </div>
           </CardContent>
         </Card>
-        
+
         <Card className="shadow-card">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
@@ -183,7 +227,7 @@ const BotLibrary = () => {
             </div>
           </CardContent>
         </Card>
-        
+
         <Card className="shadow-card">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
@@ -213,18 +257,18 @@ const BotLibrary = () => {
                 </div>
               </div>
             </CardHeader>
-            
+
             <CardContent className="space-y-4">
               {/* Tools */}
               <div>
-                <p className="text-sm font-medium mb-2">Tools ({bot.functions.length})</p>
+                <p className="text-sm font-medium mb-2">Tools ({Array.isArray(bot.functions) ? bot.functions.length : 0})</p>
                 <div className="flex flex-wrap gap-1">
                   {getBotTools(bot).slice(0, 3).map((tool) => (
                     <Badge key={tool.id} variant="secondary" className="text-xs">
                       {tool.name}
                     </Badge>
                   ))}
-                  {bot.functions.length > 3 && (
+                  {Array.isArray(bot.functions) && bot.functions.length > 3 && (
                     <Badge variant="outline" className="text-xs">
                       +{bot.functions.length - 3} more
                     </Badge>
@@ -269,7 +313,7 @@ const BotLibrary = () => {
                 <Button
                   size="sm"
                   variant="outline"
-                  onClick={() => handleDeleteBot(bot.id)}
+                  onClick={() => confirmDeleteBot(bot.id)}
                   className="gap-1 hover:bg-destructive hover:text-destructive-foreground"
                 >
                   <Trash2 className="w-3 h-3" />
@@ -286,7 +330,7 @@ const BotLibrary = () => {
             <Book className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
             <h3 className="text-lg font-medium mb-2">No bots found</h3>
             <p className="text-muted-foreground mb-4">
-              {searchQuery 
+              {searchQuery
                 ? "No bots match your search criteria. Try adjusting your search terms."
                 : "You haven't created any bots yet. Start building your first intelligent agent!"
               }
@@ -299,7 +343,20 @@ const BotLibrary = () => {
           </CardContent>
         </Card>
       )}
-    </div>
+    {/* Delete Confirmation Dialog */}
+    <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Delete Bot?</DialogTitle>
+        </DialogHeader>
+        <div>Are you sure you want to delete this bot? This action cannot be undone.</div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>Cancel</Button>
+          <Button variant="destructive" onClick={handleDeleteBot}>Delete</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  </div>
   );
 };
 

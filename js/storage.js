@@ -178,46 +178,13 @@ class Storage {
     // Initialize with sample data if empty
     initializeSampleData() {
         if (this.getBots().length === 0) {
-            const sampleBots = [
-                {
-                    name: "Customer Support Bot",
-                    description: "Handles customer inquiries and support tickets",
-                    functions: [],
-                    selectedModel: "OpenAI",
-                    agentPrompt: "You are a helpful customer support assistant. Be polite and professional.",
-                    messageConfig: null
-                },
-                {
-                    name: "Data Analysis Bot",
-                    description: "Analyzes data and generates insights",
-                    functions: [],
-                    selectedModel: "Gemini",
-                    agentPrompt: "You are a data analyst. Provide clear insights and recommendations.",
-                    messageConfig: null
-                }
-            ];
+            const sampleBots = [];
 
             sampleBots.forEach(bot => this.addBot(bot));
         }
 
         if (this.getTools().length === 0) {
-            const sampleTools = [
-                {
-                    name: "Email Sender",
-                    description: "Sends emails to specified recipients",
-                    code: "function sendEmail(to, subject, body) {\n  // Email sending logic\n  console.log('Sending email to:', to);\n  return { success: true, message: 'Email sent successfully' };\n}"
-                },
-                {
-                    name: "Data Validator",
-                    description: "Validates input data formats",
-                    code: "function validateData(data) {\n  // Data validation logic\n  if (!data || typeof data !== 'object') {\n    return { valid: false, error: 'Invalid data format' };\n  }\n  return { valid: true };\n}"
-                },
-                {
-                    name: "API Caller",
-                    description: "Makes HTTP requests to external APIs",
-                    code: "async function callAPI(url, method = 'GET', data = null) {\n  // API calling logic\n  try {\n    const response = await fetch(url, {\n      method,\n      headers: { 'Content-Type': 'application/json' },\n      body: data ? JSON.stringify(data) : null\n    });\n    return await response.json();\n  } catch (error) {\n    return { error: error.message };\n  }\n}"
-                }
-            ];
+            const sampleTools = [];
 
             sampleTools.forEach(tool => this.addTool(tool));
         }

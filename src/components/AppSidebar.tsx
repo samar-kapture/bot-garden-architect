@@ -46,7 +46,11 @@ export function AppSidebar() {
       : "hover:bg-accent/50 hover:text-accent-foreground";
 
   return (
-    <Sidebar className={isCollapsed ? "w-16" : "w-72"} collapsible="icon">
+    <Sidebar
+      className={isCollapsed ? "w-24" : "w-72"}
+      collapsible="icon"
+      style={isCollapsed ? { width: '6rem', minWidth: '6rem', maxWidth: '6rem' } : { width: '18rem', minWidth: '18rem', maxWidth: '18rem' }}
+    >
       <SidebarContent className="bg-gradient-card border-r border-border">
         {/* Header */}
         <div className="p-6 border-b border-border">
@@ -60,7 +64,7 @@ export function AppSidebar() {
                   Agent Builder
                 </h1>
                 <p className="text-xs text-muted-foreground">
-                  Build intelligent agents
+                  Build intelligent multi agent systems
                 </p>
               </div>
             )}
@@ -80,16 +84,18 @@ export function AppSidebar() {
                       to={item.url} 
                       end 
                       className={({ isActive }) => 
-                        `flex items-center gap-3 px-3 py-3 rounded-lg transition-all duration-200 ${getNavCls({ isActive })} ${isCollapsed ? 'justify-center' : ''}`
+                        `flex items-center px-0 py-3 rounded-lg transition-all duration-200 ${getNavCls({ isActive })}`
                       }
                     >
-                      <item.icon className="w-5 h-5 shrink-0" />
-                      {!isCollapsed && (
-                        <div className="flex-1 text-left min-w-0">
-                          <div className="text-sm font-medium truncate">{item.title}</div>
-                          <div className="text-xs text-muted-foreground opacity-75 truncate">{item.description}</div>
-                        </div>
-                      )}
+                      <div className={`flex items-center w-full ${isCollapsed ? 'justify-center' : 'justify-start gap-3'}`} style={isCollapsed ? { justifyContent: 'center' } : {}}>
+                        <item.icon className="w-5 h-5 shrink-0" />
+                        {!isCollapsed && (
+                          <div className="flex-1 text-left min-w-0">
+                            <div className="text-sm font-medium truncate">{item.title}</div>
+                            <div className="text-xs text-muted-foreground opacity-75 truncate">{item.description}</div>
+                          </div>
+                        )}
+                      </div>
                     </NavLink>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
@@ -98,12 +104,12 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
 
-        {/* API Status Indicator */}
+        {/* Company Branding */}
         <div className="mt-auto p-6 border-t border-border">
-          <div className={`flex items-center gap-3 ${isCollapsed ? 'justify-center' : ''}`}>
-            <div className="w-2 h-2 bg-success rounded-full animate-pulse"></div>
+          <div className={`flex items-center justify-center gap-2 ${isCollapsed ? '' : ''}`}>
+            <img src="/logo.png" alt="Kapture CX Logo" className="w-8 h-8 object-contain" />
             {!isCollapsed && (
-              <span className="text-xs text-muted-foreground">API Ready</span>
+              <span className="text-xs font-semibold text-primary tracking-wide">Kapture CX</span>
             )}
           </div>
         </div>
