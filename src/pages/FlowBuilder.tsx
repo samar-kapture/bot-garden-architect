@@ -13,6 +13,7 @@ import {
   Node,
   BackgroundVariant,
   NodeMouseHandler,
+  useReactFlow
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 
@@ -104,6 +105,42 @@ function buildBotStructure(nodes: Node[], edges: Edge[]): Record<string, string[
 const FlowBuilder = () => {
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
+  const [selectedEdge, setSelectedEdge] = useState<string | null>(null);
+  // Edge removal handler
+  const onEdgeClick = useCallback((event, edge) => {
+    event.stopPropagation();
+    setSelectedEdge(edge.id);
+  }, []);
+
+  const removeSelectedEdge = () => {
+    if (selectedEdge) {
+      setEdges(eds => eds.filter(e => e.id !== selectedEdge));
+      setSelectedEdge(null);
+    }
+  };
+
+  // Compute which nodes have more than one outgoing edge
+  const getMultiOutgoingNodeIds = () => {
+    const outgoing: Record<string, number> = {};
+    edges.forEach(edge => {
+      outgoing[edge.source] = (outgoing[edge.source] || 0) + 1;
+    });
+    return Object.keys(outgoing).filter(nodeId => outgoing[nodeId] > 1);
+  };
+
+  // Compute edge styles: if source node has >1 outgoing, make edge dotted
+  const getStyledEdges = () => {
+    const multiOutgoing = new Set(getMultiOutgoingNodeIds());
+    return edges.map(edge => {
+      if (multiOutgoing.has(edge.source)) {
+        return {
+          ...edge,
+          style: { ...edge.style, strokeDasharray: '4 3' }
+        };
+      }
+      return { ...edge, style: { ...edge.style, strokeDasharray: undefined } };
+    });
+  };
   const [selectedBot, setSelectedBot] = useState<string | null>(null);
   const [availableBots, setAvailableBots] = useState<BotType[]>([]);
   const [flowName, setFlowName] = useState("Untitled Flow");
@@ -138,13 +175,23 @@ const FlowBuilder = () => {
     }
   };
 
+  // Node colors: avoid start (green) and end (red) node colors
   const getNodeColor = (index: number) => {
+    // Avoid: 'hsl(142, 76%, 36%)' (green), 'hsl(0, 72%, 51%)' (red)
+    // Use other vibrant colors
     const colors = [
-      'hsl(217 91% 60%)',
-      'hsl(262 83% 58%)',
-      'hsl(142 76% 36%)',
-      'hsl(38 92% 50%)',
-      'hsl(0 72% 51%)'
+      'hsl(217, 91%, 60%)', // blue
+      'hsl(262, 83%, 58%)', // purple
+      'hsl(38, 92%, 50%)',  // yellow
+      'hsl(291, 64%, 42%)', // violet
+      'hsl(204, 70%, 53%)', // cyan
+      'hsl(12, 88%, 59%)',  // orange
+      'hsl(174, 62%, 47%)', // teal
+      'hsl(48, 89%, 60%)',  // gold
+      'hsl(340, 82%, 52%)', // pink
+      'hsl(200, 98%, 39%)', // blue2
+      'hsl(300, 76%, 72%)', // light purple
+      'hsl(0, 0%, 40%)',    // gray
     ];
     return colors[index % colors.length];
   };
@@ -191,13 +238,14 @@ const FlowBuilder = () => {
   const saveFlow = async () => {
     try {
       const bot_structure = buildBotStructure(nodes, edges);
-      console.log(bot_structure)
+      // Convert spaces to underscores for config_id
+      const configId = flowName.replace(/\s+/g, '_');
       await fetch(`${API_BASE_URL}/multiagent-core/graph_structure/bot-structure`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "accept": "application/json" },
         body: JSON.stringify({
           client_id: "kapture",
-          config_id: flowName,
+          config_id: configId,
           structure: bot_structure,
         }),
       });
@@ -355,21 +403,29 @@ const FlowBuilder = () => {
           </CardContent>
         </Card>
 
-        {/* Selected Node Actions */}
-        {selectedNode && (
+        {/* Dynamic Remove Button (Node or Edge) */}
+        {(selectedNode || selectedEdge) && (
           <Card className="shadow-card">
             <CardHeader>
-              <CardTitle className="text-lg">Node Actions</CardTitle>
+              <CardTitle className="text-lg">{selectedNode ? 'Node Actions' : 'Edge Actions'}</CardTitle>
             </CardHeader>
             <CardContent>
               <Button
                 variant="destructive"
                 size="sm"
-                onClick={() => removeNode(selectedNode)}
+                onClick={() => {
+                  if (selectedNode && selectedNode !== "__start__" && selectedNode !== "__end__") removeNode(selectedNode);
+                  if (selectedEdge) removeSelectedEdge();
+                }}
                 className="w-full gap-2"
+                disabled={selectedNode === "__start__" || selectedNode === "__end__"}
               >
                 <Trash2 className="w-4 h-4" />
-                Remove Selected Node
+                {selectedNode
+                  ? (selectedNode === "__start__" || selectedNode === "__end__"
+                      ? `Cannot Remove ${selectedNode === "__start__" ? 'Start' : 'End'} Node`
+                      : 'Remove Selected Node')
+                  : 'Remove Selected Edge'}
               </Button>
             </CardContent>
           </Card>
@@ -395,11 +451,19 @@ const FlowBuilder = () => {
       <div className="flex-1 relative bg-background">
         <ReactFlow
           nodes={nodes}
-          edges={edges}
+          edges={getStyledEdges()}
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
-          onNodeClick={onNodeClick}
+          onNodeClick={(event, node) => {
+            setSelectedNode(node.id);
+            setSelectedEdge(null);
+          }}
+          onEdgeClick={(event, edge) => {
+            event.stopPropagation();
+            setSelectedEdge(edge.id);
+            setSelectedNode(null);
+          }}
           fitView
           attributionPosition="top-right"
         >

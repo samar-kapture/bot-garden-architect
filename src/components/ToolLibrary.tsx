@@ -102,10 +102,28 @@ export const ToolLibrary = ({ open, onOpenChange, selectedTools, onToolSelection
     }
   };
 
-  const handleUpdateTool = async (toolData: { name: string; description: string; code: string }) => {
+  const handleUpdateTool = async (toolData: { name: string; description: string; code: string; entry_function?: string; query_description?: string; requirements?: string; env_vars?: string }) => {
     if (!editingTool) return;
     try {
-      await apiService.updateTool(editingTool.tool_id, toolData);
+      // Build query params
+      const params = new URLSearchParams({
+        entry_function: toolData.entry_function || '',
+        function_name: toolData.name,
+        description: toolData.description,
+        query_description: toolData.query_description || '',
+        requirements: toolData.requirements || '',
+        env_vars: toolData.env_vars || '{}',
+      });
+      const url = `${API_BASE_URL}/multiagent-core/tools/clients/kapture/update-tools/${editingTool.tool_id}?${params.toString()}`;
+      const res = await fetch(url, {
+        method: 'PUT',
+        headers: {
+          'accept': 'application/json',
+          'Content-Type': 'text/plain',
+        },
+        body: 'string',
+      });
+      if (!res.ok) throw new Error('Failed to update tool');
       loadTools();
       setShowFunctionDialog(false);
       setEditingTool(null);
@@ -161,9 +179,85 @@ export const ToolLibrary = ({ open, onOpenChange, selectedTools, onToolSelection
     }
   };
 
-  const handleEditTool = (tool: any) => {
-    setEditingTool(tool);
-    setShowFunctionDialog(true);
+  const handleEditTool = async (tool: any) => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/multiagent-core/tools/clients/kapture/tools/${tool.tool_id}`, {
+        headers: { 'accept': 'application/json' }
+      });
+      if (!res.ok) throw new Error('Failed to fetch tool details');
+      const toolData = await res.json();
+
+      // --- Prefill fields for UI: query_description as key list, requirements as joined string, env_vars as pretty JSON ---
+      // Query Description: show keys as comma-separated string (e.g. "pincode, city")
+      let queryDescriptionPrefill = '';
+      if (toolData.query_description) {
+        let qd = toolData.query_description;
+        if (typeof qd === 'string') {
+          try {
+            qd = JSON.parse(qd);
+          } catch {
+            // fallback: keep as string
+          }
+        }
+        if (qd && typeof qd === 'object' && !Array.isArray(qd)) {
+          queryDescriptionPrefill = Object.keys(qd).join(', ');
+        } else if (typeof qd === 'string') {
+          queryDescriptionPrefill = qd;
+        }
+      }
+
+      // Requirements: always comma-separated string, or empty string
+      let requirementsPrefill = '';
+      if (Array.isArray(toolData.requirements)) {
+        requirementsPrefill = toolData.requirements.join(', ');
+      } else if (typeof toolData.requirements === 'string') {
+        // Try to parse as JSON array if possible
+        try {
+          const arr = JSON.parse(toolData.requirements);
+          if (Array.isArray(arr)) {
+            requirementsPrefill = arr.join(', ');
+          } else {
+            requirementsPrefill = toolData.requirements;
+          }
+        } catch {
+          requirementsPrefill = toolData.requirements;
+        }
+      }
+
+      // Env Vars: always pretty JSON, or '{}'
+      let envVarsPrefill = '{}';
+      if (toolData.env_vars) {
+        let ev = toolData.env_vars;
+        if (typeof ev === 'string') {
+          try {
+            ev = JSON.parse(ev);
+          } catch {
+            // fallback: keep as string
+          }
+        }
+        if (typeof ev === 'object') {
+          envVarsPrefill = JSON.stringify(ev, null, 2);
+        } else if (typeof ev === 'string') {
+          envVarsPrefill = ev;
+        }
+      }
+
+      setEditingTool({
+        tool_id: toolData.tool_id,
+        name: toolData.original_name || toolData.name || '',
+        description: toolData.description || '',
+        query_description: queryDescriptionPrefill,
+        requirements: requirementsPrefill,
+        code: toolData.code || '',
+        env_vars: envVarsPrefill,
+        // Add any other fields as needed
+      });
+      setShowFunctionDialog(true);
+    } catch (error) {
+      console.error('Error fetching tool details:', error);
+      setEditingTool(tool); // fallback to old data if fetch fails
+      setShowFunctionDialog(true);
+    }
   };
 
   const formatDate = (dateString: string) => {
@@ -187,10 +281,20 @@ export const ToolLibrary = ({ open, onOpenChange, selectedTools, onToolSelection
     (tool.description?.toLowerCase() || '').includes(searchQuery.toLowerCase())
   );
 
+  // Support both string[] and object[] for selectedTools
+  const getSelectedToolIds = () => {
+    if (!selectedTools || selectedTools.length === 0) return [];
+    if (typeof selectedTools[0] === 'string') return selectedTools;
+    // If full tool objects
+    return selectedTools.map((t: any) => t.tool_id || t.id);
+  };
+
+  const selectedToolIds = getSelectedToolIds();
+
   const handleToolToggle = (toolId: string) => {
-    const newSelection = selectedTools.includes(toolId)
-      ? selectedTools.filter(id => id !== toolId)
-      : [...selectedTools, toolId];
+    const newSelection = selectedToolIds.includes(toolId)
+      ? selectedToolIds.filter(id => id !== toolId)
+      : [...selectedToolIds, toolId];
     onToolSelectionChange(newSelection);
   };
 
@@ -272,7 +376,7 @@ export const ToolLibrary = ({ open, onOpenChange, selectedTools, onToolSelection
                           <div className="flex items-start justify-between">
                             <div className="flex items-center gap-3">
                               <Checkbox
-                                checked={selectedTools.includes(tool.tool_id)}
+                                checked={selectedToolIds.includes(tool.tool_id)}
                                 onCheckedChange={() => handleToolToggle(tool.tool_id)}
                                 disabled={isDeploying || isError || isDeleting}
                               />

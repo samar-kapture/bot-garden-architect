@@ -47,8 +47,16 @@ const BotCreator = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
+
   const models = ["Gemini", "OpenAI", "Deepseek"];
   const toneOptions = ["casual", "professional", "friendly"];
+
+  // Load all tools on mount and whenever selectedTools changes
+  // Always reload tools when selectedTools changes, but also on mount and when editing bot changes
+  useEffect(() => {
+    loadTools();
+    // eslint-disable-next-line
+  }, [selectedTools, isEditing, editingBotId]);
 
 useEffect(() => {
   // Always check for edit param first, then clone, then fallback to state
@@ -194,9 +202,74 @@ useEffect(() => {
   }
 }, [location.state, searchParams]);
 
-  const loadTools = () => {
-    const tools = apiService.getTools();
-    setAllTools(tools);
+  // Always load the full tool objects for the selected tool IDs (fetch from backend)
+  const loadTools = async () => {
+    try {
+      // Fetch all tools from backend
+      const res = await fetch(`${API_BASE_URL}/multiagent-core/tools/clients/kapture/tools/`, {
+        headers: { 'accept': 'application/json' }
+      });
+      if (!res.ok) throw new Error('Failed to fetch tools');
+      const data = await res.json();
+      const toolsArr = Array.isArray(data?.tools) ? data.tools : Array.isArray(data) ? data : [];
+
+      // If selectedTools contains full tool objects (from bot details), merge them in
+      let selectedToolObjs: any[] = [];
+      if (
+        Array.isArray(selectedTools) &&
+        selectedTools.length > 0 &&
+        typeof selectedTools[0] === 'object' &&
+        selectedTools[0] !== null &&
+        (selectedTools[0] && (('tool_id' in selectedTools[0]) || ('id' in selectedTools[0])))
+      ) {
+        selectedToolObjs = selectedTools as any[];
+      } else if (
+        Array.isArray(selectedTools) &&
+        selectedTools.length > 0 &&
+        typeof selectedTools[0] === 'string'
+      ) {
+        // If only IDs, try to find them in toolsArr
+        selectedToolObjs = toolsArr.filter((t: any) => selectedTools.includes(t.tool_id));
+      }
+
+      // Merge: show all tools, but mark selected
+      const mapped = toolsArr.map((t: any) => ({
+        id: t.tool_id,
+        name: t.original_name || t.name,
+        description: t.description,
+        createdAt: t.created_at || t.createdAt,
+        ...t,
+        isSelected: selectedToolObjs.some(sel => (sel.tool_id || sel.id) === t.tool_id)
+      }));
+
+      // Add any selected tools not in toolsArr (e.g. just created or from bot details)
+      selectedToolObjs.forEach(sel => {
+        if (!mapped.some(t => t.id === (sel.tool_id || sel.id))) {
+          mapped.push({
+            id: sel.tool_id || sel.id,
+            name: sel.original_name || sel.name,
+            description: sel.description,
+            createdAt: sel.created_at || sel.createdAt,
+            ...sel,
+            isSelected: true
+          });
+        }
+      });
+
+      setAllTools(mapped);
+      // If selectedTools is array of objects, update selectedTools to be array of IDs for consistency
+      if (
+        Array.isArray(selectedTools) &&
+        selectedTools.length > 0 &&
+        typeof selectedTools[0] === 'object' &&
+        selectedTools[0] !== null &&
+        ((selectedTools[0] as any).tool_id || (selectedTools[0] as any).id)
+      ) {
+        setSelectedTools(selectedToolObjs.map((sel: any) => sel.tool_id || sel.id));
+      }
+    } catch (e) {
+      setAllTools([]);
+    }
   };
 
   const loadBotForEditing = (botId: string) => {
@@ -241,6 +314,7 @@ useEffect(() => {
       };
 
       let response;
+      let botIdToBind = editingBotId;
       if (isEditing && editingBotId) {
         // Update existing bot (PUT)
         response = await fetch(`${API_BASE_URL}/multiagent-core/bot/clients/kapture/bots/${encodeURIComponent(editingBotId)}`,
@@ -266,6 +340,24 @@ useEffect(() => {
       }
 
       if (!response.ok) throw new Error('API error');
+
+      // Get bot id for binding tools
+      if (!isEditing) {
+        const botData = await response.json();
+        botIdToBind = botData.bot_id || botData.id;
+      }
+
+      // Bind tools to bot
+      if (botIdToBind && selectedTools.length > 0) {
+        const params = selectedTools.map(id => `tool_ids=${encodeURIComponent(id)}`).join('&');
+        const bindUrl = `${API_BASE_URL}/multiagent-core/tools/clients/kapture/bots/${botIdToBind}/tools/bind?${params}`;
+        const bindRes = await fetch(bindUrl, {
+          method: 'POST',
+          headers: { 'accept': 'application/json' },
+          body: ''
+        });
+        if (!bindRes.ok) throw new Error('Failed to bind tools');
+      }
 
       toast({
         title: isEditing ? "Bot Updated" : "Bot Created",
@@ -309,11 +401,20 @@ useEffect(() => {
   const handleAddFunction = async (toolData: { name: string; description: string; code: string }) => {
     try {
       const newTool = await apiService.createTool(toolData);
-      setAllTools([...allTools, newTool]);
-      setSelectedTools([...selectedTools, newTool.id]);
+      // Map API fields to internal Tool type
+      const t = newTool as any;
+      const mappedTool = {
+        id: t.tool_id,
+        name: t.original_name || t.name,
+        description: t.description,
+        createdAt: t.created_at || t.createdAt,
+        ...newTool
+      };
+      setAllTools([...allTools, mappedTool]);
+      setSelectedTools([...selectedTools, mappedTool.id]);
       toast({
         title: "Tool Created",
-        description: `Tool "${toolData.name}" has been created and added to this bot.`,
+        description: `Tool \"${toolData.name}\" has been created and added to this bot.`,
       });
     } catch (error) {
       toast({
@@ -565,15 +666,16 @@ useEffect(() => {
                       <p className="font-medium">No Tools Selected</p>
                       <p className="text-sm mt-1">Select tools from the library or create a new one</p>
                     </div>
-                  ) : (
-                    <div className="space-y-3">
+                  ) : null}
+                  {/* Always show selected tools summary, even if empty */}
+                  <div className="space-y-3 mt-2">
                       {getSelectedToolsData().map((tool) => (
                         <div key={tool.id} className="flex items-center justify-between p-4 border border-border rounded-xl bg-card/50">
                           <div className="flex-1">
                             <div className="font-medium text-foreground">{tool.name}</div>
                             <div className="text-sm text-muted-foreground mt-1">{tool.description}</div>
                             <div className="text-xs text-muted-foreground mt-1">
-                              Created: {new Date(tool.createdAt).toLocaleDateString()}
+                              Created: {tool.createdAt ? new Date(tool.createdAt).toLocaleDateString() : ''}
                             </div>
                           </div>
                           <Button
@@ -586,8 +688,7 @@ useEffect(() => {
                           </Button>
                         </div>
                       ))}
-                    </div>
-                  )}
+                  </div>
                 </CardContent>
               </Card>
             </div>

@@ -38,15 +38,24 @@ const BotLibrary = () => {
       // The API returns { total, skip, limit, bots: [...] }
       const botsArr = Array.isArray(botsData?.bots) ? botsData.bots : [];
       // Map API bots to local BotType structure for display
-      setBots(botsArr.map(apiBot => ({
-        id: apiBot.bot_id,
-        name: apiBot.name,
-        description: apiBot.description,
-        agentPrompt: apiBot.final_prompt,
-        createdAt: apiBot.created_at,
-        updatedAt: apiBot.updated_at,
-        functions: [], // No tools info from API, so leave empty
-      })));
+      setBots(botsArr.map(apiBot => {
+        const botObj: any = {
+          id: apiBot.bot_id,
+          name: apiBot.name,
+          description: apiBot.description,
+          agentPrompt: apiBot.final_prompt,
+          createdAt: apiBot.created_at,
+          updatedAt: apiBot.updated_at,
+          // Prefer tools (array of objects), fallback to functions (array of ids), fallback to []
+          functions: Array.isArray(apiBot.tools)
+            ? apiBot.tools.map((t: any) => t.tool_id || t.id)
+            : Array.isArray(apiBot.functions)
+              ? apiBot.functions
+              : [],
+        };
+        if (Array.isArray(apiBot.tools)) botObj._tools = apiBot.tools;
+        return botObj;
+      }));
     } catch (e) {
       setBots([]);
     }
@@ -138,8 +147,17 @@ const BotLibrary = () => {
     }
   };
 
-  const getBotTools = (bot: BotType) => {
-    // If bot.functions is missing or empty, return []
+  const getBotTools = (bot: any) => {
+    // If bot._tools is present and is array of objects, use it directly
+    if (Array.isArray(bot._tools) && bot._tools.length > 0 && typeof bot._tools[0] === 'object') {
+      return bot._tools.map((t: any) => ({
+        id: t.tool_id || t.id,
+        name: t.original_name || t.name,
+        description: t.description,
+        ...t
+      }));
+    }
+    // Otherwise, fallback to matching ids in tools[]
     if (!bot.functions || !Array.isArray(bot.functions)) return [];
     return tools.filter(tool => bot.functions.includes(tool.id));
   };
@@ -214,19 +232,27 @@ const BotLibrary = () => {
           </CardContent>
         </Card>
 
+        {/*
         <Card className="shadow-card">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Total Tools</p>
                 <p className="text-2xl font-bold">
-                  {bots.reduce((acc, bot) => acc + bot.functions.length, 0)}
+                  {bots.reduce((acc, bot) => {
+                    // Prefer _tools if present, else functions
+                    if (Array.isArray((bot as any)._tools)) {
+                      return acc + (bot as any)._tools.length;
+                    }
+                    return acc + (Array.isArray(bot.functions) ? bot.functions.length : 0);
+                  }, 0)}
                 </p>
               </div>
               <Edit className="w-8 h-8 text-info" />
             </div>
           </CardContent>
         </Card>
+        */}
 
         <Card className="shadow-card">
           <CardContent className="p-4">
@@ -261,7 +287,7 @@ const BotLibrary = () => {
             <CardContent className="space-y-4">
               {/* Tools */}
               <div>
-                <p className="text-sm font-medium mb-2">Tools ({Array.isArray(bot.functions) ? bot.functions.length : 0})</p>
+                {/* <p className="text-sm font-medium mb-2">Tools ({Array.isArray((bot as any)._tools) ? (bot as any)._tools.length : (Array.isArray(bot.functions) ? bot.functions.length : 0)})</p> */}
                 <div className="flex flex-wrap gap-1">
                   {getBotTools(bot).slice(0, 3).map((tool) => (
                     <Badge key={tool.id} variant="secondary" className="text-xs">

@@ -40,13 +40,76 @@ export const FunctionDialog = ({ open, onOpenChange, onSave, initialTool }: Func
 
   useEffect(() => {
     if (initialTool) {
-      setFunctionName(initialTool.name);
-      setDescription(initialTool.description);
-      setEntryFunction("");
-      setQueryFields([{ key: '', description: '', type: '' }]);
-      setRequirements("");
-      setEnvVars("{}");
-      setCode(initialTool.code);
+      setFunctionName((initialTool as any).name);
+      setDescription((initialTool as any).description);
+      setEntryFunction((initialTool as any).entry_function || "");
+      // Prefill queryFields from query_description (object with keys)
+      let qFields: { key: string; description: string; type: string }[] = [];
+      const queryDesc = (initialTool as any).query_description;
+      if (queryDesc) {
+        let qd = queryDesc;
+        if (typeof qd === 'string') {
+          try {
+            qd = JSON.parse(qd);
+          } catch {
+            // fallback: treat as empty
+            qd = {};
+          }
+        }
+        if (qd && typeof qd === 'object' && !Array.isArray(qd)) {
+          Object.entries(qd).forEach(([key, val]: [string, any]) => {
+            if (val && typeof val === 'object') {
+              qFields.push({
+                key: key || '',
+                description: typeof val.description === 'string' ? val.description : '',
+                type: typeof val.type === 'string' ? val.type : ''
+              });
+            } else {
+              qFields.push({ key: key || '', description: '', type: '' });
+            }
+          });
+        }
+      }
+      // Always set at least one empty field for UI
+      setQueryFields(qFields.length > 0 ? qFields : [{ key: '', description: '', type: '' }]);
+      // Prefill requirements as comma-separated string
+      const reqs = (initialTool as any).requirements;
+      if (Array.isArray(reqs)) {
+        setRequirements(reqs.join(', '));
+      } else if (typeof reqs === 'string') {
+        try {
+          const arr = JSON.parse(reqs);
+          if (Array.isArray(arr)) {
+            setRequirements(arr.join(', '));
+          } else {
+            setRequirements(reqs);
+          }
+        } catch {
+          setRequirements(reqs);
+        }
+      } else {
+        setRequirements("");
+      }
+      // Prefill envVars as pretty JSON
+      let envVarsStr = '{}';
+      const envVarsVal = (initialTool as any).env_vars;
+      if (envVarsVal) {
+        let ev = envVarsVal;
+        if (typeof ev === 'string') {
+          try {
+            ev = JSON.parse(ev);
+          } catch {
+            // fallback: keep as string
+          }
+        }
+        if (typeof ev === 'object') {
+          envVarsStr = JSON.stringify(ev, null, 2);
+        } else if (typeof ev === 'string') {
+          envVarsStr = ev;
+        }
+      }
+      setEnvVars(envVarsStr);
+      setCode((initialTool as any).code);
     } else {
       // Reset form for new tool
       setFunctionName("");
